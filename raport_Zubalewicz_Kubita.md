@@ -1,9 +1,10 @@
 # Raport z projektu: ML Running Performance Scorer
 
 ## 1. Abstract
-Projekt koncentruje się na stworzeniu obiektywnego systemu oceny kondycji biegowej, opartego na **uczeniu maszynowym**. Zamiast polegać na prostych statystykach, system analizuje korelację między tempem biegu a kosztem fizjologicznym (tętnem), biorąc pod uwagę parametry biomechaniczne oraz kontekst fizyczny biegacza. 
+Celem projektu jest stworzenie obiektywnego systemu oceny kondycji biegowej, opartego na modelu **uczeniu maszynowym**. Zamiast polegać na prostych statystykach, system analizuje korelację między tempem biegu a kosztem fizjologicznym (tętnem), biorąc pod uwagę parametry biomechaniczne oraz kontekst fizyczny biegacza. 
+Dzięki integracji modelu sztucznej inteligencji z czujnikami zawartych w zegarkach Garmin biegacze są w stanie badać swój progres sportowy.
 
-Model został wytrenowany na potężnym zbiorze danych obejmującym ponad **170 000 aktywności**, co pozwala na rzetelne odniesienie indywidualnego wyniku do szerokiej populacji biegaczy.
+Model został wytrenowany na zbiorze danych obejmującym ponad **170 000 aktywności**, co pozwala na rzetelne odniesienie indywidualnego wyniku do szerokiej populacji biegaczy.
 
 ---
 
