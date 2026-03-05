@@ -19,17 +19,24 @@ Poniższa tabela podsumowuje wydajność testowanych modeli na podstawie uzyskan
 | **VAE** | Probabilistic Latent Space | N/A (KL Div) | Normalizacja rankingów i generowanie |
 | **t-SNE** | Manifold Learning | N/A (KL-Loss) | Wizualizacja klastrów i grup |
 
+### Wizualizacja błędu rekonstrukcji
+Dla lepszego zrozumienia efektywności modeli, poniższy wykres przedstawia różnice w błędzie MSE. Zauważalny jest wyraźny zysk przy przejściu z architektury prostej na średnią.
+
+![Porównanie MSE](mse_comparison.png)
+
 ---
 
 ## 3. Analiza Porównawcza i Wnioski
 
 ### Wydajność Rekonstrukcji (MSE)
-*   **Optymalna złożoność:** Najniższy błąd rekonstrukcji osiągnął **Medium Autoencoder (0.009906)**. Wynik ten sugeruje, że dla badanego zbioru danych umiarkowanie głęboka sieć najlepiej wychwytuje istotne cechy (features) bez wprowadzania nadmiernego szumu.
+*   **Optymalna złożoność:** Najniższy błąd rekonstrukcji osiągnął **Medium Autoencoder (0.009906)**. Sugeruje to, że dla badanego zbioru danych umiarkowanie głęboka sieć najlepiej wychwytuje istotne cechy bez wprowadzania nadmiernego szumu.
 *   **Problem Simple AE:** Najprostszy model wykazuje najwyższy błąd, co oznacza, że pojedyncza warstwa liniowa nie jest w stanie w pełni odwzorować nieliniowej natury wyników sportowych.
-*   **Granica Deep AE:** Model Deep AE uzyskał wynik niemal identyczny z Medium AE, co wskazuje na osiągnięcie "płaskowyżu" uczenia – dodatkowe warstwy nie przyniosły już istotnej poprawy dokładności przy tak silnej kompresji (do 1 wymiaru).
+*   **Granica Deep AE:** Dodatkowe warstwy w modelu Deep AE nie przyniosły już istotnej poprawy dokładności, co wskazuje na optymalną pojemność modelu Medium AE dla tego problemu.
 
-### Przestrzeń Ukryta (Latent Space)
-*   Wszystkie autoenkodery zostały skonfigurowane tak, aby ich "wąskie gardło" (bottleneck) wynosiło **1**, co pozwala na redukcję wielu parametrów biegacza do jednej, skalarnej wartości reprezentującej ogólną wydajność (**Performance Score**).
+### Stabilność Rankingu (Model Agreement)
+Weryfikacja, czy modele o różnej głębokości zgadzają się co do oceny zawodników, została przedstawiona na poniższym wykresie korelacji. Silny trend liniowy potwierdza, że wyliczony `performance_score` jest stabilną i wiarygodną metryką.
+
+![Zgodność modeli](model_agreement.png)
 
 ---
 
@@ -46,10 +53,10 @@ W celu weryfikacji sensu fizycznego wygenerowanych wyników, przeprowadzono anal
 | **4571** | **-16.0706** | 12.28 | 165.65 | 153.02 | **Bottom 2:** Niska prędkość przy wysokim tętnie. |
 | **4575** | **-16.0643** | 11.88 | 165.65 | 153.04 | **Bottom 1:** Najniższa efektywność biegu. |
 
-### Kluczowe obserwacje z walidacji:
-1.  **Rozpiętość Wyników:** Model wygenerował wyraźną skalę (od -16 do +9), co pozwala na precyzyjne różnicowanie poziomu zawodników.
-2.  **Korelacja z Prędkością:** Zawodnicy z ujemnym wynikiem poruszają się niemal **trzykrotnie wolniej** od liderów rankingu.
-3.  **Efektywność (Power-to-HR):** Model poprawnie zinterpretował wysoką wydajność lidera (233W przy 136 bpm) w kontrze do niskiej wydajności dołu tabeli (165W przy 153 bpm).
+### Fizjologiczny profil zawodników
+Poniższy wykres słupkowy ilustruje różnice w kluczowych parametrach po normalizacji. Wyraźnie widać, że liderzy dominują w sferze mechanicznej (prędkość/moc) przy relatywnie niższym lub porównywalnym obciążeniu kardiologicznym (HR).
+
+![Profile zawodników](athlete_profiles.png)
 
 ---
 
@@ -57,7 +64,7 @@ W celu weryfikacji sensu fizycznego wygenerowanych wyników, przeprowadzono anal
 Badanie potwierdziło, że wybór architektury ma kluczowe znaczenie dla dokładności modelu. W kontekście oceny wyników biegowych:
 *   **Medium Autoencoder** okazał się najbardziej efektywnym narzędziem do precyzyjnego rankingu.
 *   **VAE** jest rekomendowany do dalszych prac nad modelami generatywnymi i normalizacją populacji.
-*   Model poprawnie mapuje pojęcie "wydajności sportowej" na skalę numeryczną, co ma realne zastosowanie w analityce sportowej.
+*   Model poprawnie mapuje pojęcie "wydajności sportowej" na skalę numeryczną, co ma realne zastosowanie w analityce sportowej i automatyzacji oceny treningu.
 
 ---
 *Autor: mkubita*  
