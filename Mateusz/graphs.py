@@ -61,7 +61,6 @@ mse_values = [mse_s, mse_m, mse_d]
 ax = sns.barplot(x=model_names, y=mse_values, hue=model_names, palette='viridis', legend=False)
 plt.title('Porównanie Błędu Rekonstrukcji (MSE) - Im niżej, tym lepiej', fontsize=14, pad=15)
 plt.ylabel('Mean Squared Error')
-# Dodanie wartości nad słupkami
 for i, v in enumerate(mse_values):
     ax.text(i, v + (max(mse_values)*0.01), f'{v:.6f}', ha='center', fontweight='bold')
 plt.tight_layout()
@@ -79,24 +78,38 @@ plt.tight_layout()
 plt.savefig('model_agreement.png')
 plt.close()
 
-# WYKRES 3: Profil Skrajnych Zawodników (Grouped Bar Chart)
+# WYKRES 3: Profil Skrajnych Zawodników (BEZ NORMALIZACJI - SUBPLOTY)
+print("Zapisywanie profilu zawodników (surowe jednostki)...")
 df_numeric['performance_score'] = score_m 
 top = df_numeric.nlargest(3, 'performance_score')
 bottom = df_numeric.nsmallest(2, 'performance_score')
 extremes = pd.concat([top, bottom])
+extremes.index = ['Lider 1', 'Lider 2', 'Lider 3', 'Outsider 2', 'Outsider 1']
 
-# Wybór i normalizacja cech do porównania
 cols = ['average_speed', 'average_power', 'average_hr']
-plot_data = (extremes[cols] - extremes[cols].min()) / (extremes[cols].max() - extremes[cols].min())
-plot_data.index = ['Lider 1', 'Lider 2', 'Lider 3', 'Outsider 2', 'Outsider 1']
+titles = ['Prędkość Średnia [km/h]', 'Moc Średnia [W]', 'Tętno Średnie [bpm]']
+colors_map = ["RdYlBu_r"] # Odwrócona skala: niebieski dla słabych, czerwony/żółty dla mocnych
 
-ax = plot_data.T.plot(kind='bar', figsize=(14, 8), width=0.8, color=sns.color_palette("RdYlBu", 5))
-plt.title('Porównanie Kluczowych Metryk: Top 3 vs Bottom 2 (Znormalizowane)', fontsize=14)
-plt.ylabel('Relatywna skala (0.0 - 1.0)')
-plt.xticks(rotation=0)
-plt.legend(title='Pozycja w rankingu', bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.grid(axis='y', linestyle='--', alpha=0.7)
-plt.tight_layout()
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+fig.suptitle('Fizjologiczny Profil Skrajnych Zawodników (Wartości Rzeczywiste)', fontsize=16)
+
+for i, col in enumerate(cols):
+    sns.barplot(x=extremes.index, y=extremes[col], ax=axes[i], palette="RdYlBu_r", hue=extremes.index, legend=False)
+    axes[i].set_title(titles[i], fontsize=12)
+    axes[i].set_ylabel('')
+    axes[i].set_xlabel('')
+    axes[i].tick_params(axis='x', rotation=30)
+    
+    # Dodanie etykiet z wartościami nad słupkami
+    for p in axes[i].patches:
+        axes[i].annotate(f'{p.get_height():.1f}', 
+                        (p.get_x() + p.get_width() / 2., p.get_height()), 
+                        ha='center', va='center', 
+                        xytext=(0, 9), 
+                        textcoords='offset points',
+                        fontweight='bold')
+
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 plt.savefig('athlete_profiles.png')
 plt.close()
 
