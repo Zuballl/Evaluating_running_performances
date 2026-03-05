@@ -6,10 +6,24 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model, backend as K
 from sklearn.preprocessing import MinMaxScaler
 
-# --- 1. DATA LOADING & PREPROCESSING ---
-def prepare_data(df):
+# --- 1. DATA LOADING & CLEANING ---
+print("Loading and cleaning data for VAE...")
+df_activities = pd.read_csv("activities.csv")
+df_athletes = pd.read_csv("athletes.csv")
+df = pd.merge(df_activities, df_athletes, on='id')
+df.columns = df.columns.str.strip()
+
+# Select numeric and sample
+df_numeric = df.select_dtypes(include=[np.number]).head(10000).copy()
+
+# Critical Cleaning for VAE (Neural networks hate Infs)
+df_numeric = df_numeric.replace([np.inf, -np.inf], np.nan)
+df_numeric = df_numeric.fillna(df_numeric.mean())
+df_numeric = df_numeric.dropna(axis=1)
+
+def prepare_data(df_in):
     scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(df)
+    scaled_data = scaler.fit_transform(df_in)
     return scaled_data, scaler
 
 # --- 2. VAE COMPONENTS ---
@@ -22,7 +36,7 @@ class Sampling(layers.Layer):
         epsilon = K.random_normal(shape=(batch, dim))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
-def build_vae(input_dim=10, intermediate_dim=16):
+def build_vae(input_dim, intermediate_dim=32):
     # Encoder
     encoder_inputs = layers.Input(shape=(input_dim,))
     h = layers.Dense(intermediate_dim, activation="relu")(encoder_inputs)
@@ -62,43 +76,45 @@ class VAE(Model):
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return {"loss": total_loss, "recon_loss": recon_loss, "kl": tf.reduce_mean(kl_loss)}
 
-# --- 3. EXECUTION SCRIPT ---
+# --- 3. EXECUTION ---
 if __name__ == "__main__":
-    # --- STEP A: Load Data ---
-    # Replace this with: df = pd.read_csv("your_file.csv")
-    np.random.seed(42)
-    fake_data = np.random.rand(200, 10)
-    col_names = [f"Metric_{i+1}" for i in range(10)]
-    df = pd.DataFrame(fake_data, columns=col_names)
+    # --- STEP A: Prep Data ---
+    scaled_data, _ = prepare_data(df_numeric)
+    input_dim = df_numeric.shape[1]
 
     # --- STEP B: Train VAE ---
-    scaled_data, _ = prepare_data(df)
-    encoder, decoder = build_vae(input_dim=10)
+    encoder, decoder = build_vae(input_dim=input_dim)
     vae = VAE(encoder, decoder)
     vae.compile(optimizer='adam')
     
-    print("Training VAE...")
-    vae.fit(scaled_data, epochs=100, batch_size=16, verbose=0)
+    print(f"Training VAE on {input_dim} features...")
+    # Using 50 epochs and batch size 32 for better convergence on real data
+    vae.fit(scaled_data, epochs=50, batch_size=32, verbose=1)
 
     # --- STEP C: Generate Scores ---
     z_mean, _, _ = encoder.predict(scaled_data)
-    df['Performance_Score'] = z_mean
+    df_numeric['Performance_Score'] = z_mean
 
     # --- STEP D: Rank Athletes ---
-    ranked_df = df.sort_values(by='Performance_Score', ascending=False)
-    print("\nTop 5 Athletes based on VAE Score:")
+    ranked_df = df_numeric.sort_values(by='Performance_Score', ascending=False)
+    print("\nTop 5 Athletes based on VAE Performance Score:")
     print(ranked_df[['Performance_Score']].head())
 
     # --- STEP E: Influence Analysis ---
-    # We correlate the 1D score back to the original 10 metrics
-    correlations = df.corr()['Performance_Score'].drop('Performance_Score')
+    # Correlation between the score and your metrics (e.g., avg_power, hr, etc.)
+    correlations = df_numeric.corr()['Performance_Score'].drop(['Performance_Score'])
     
-    plt.figure(figsize=(10, 6))
-    correlations.sort_values().plot(kind='barh', color='skyblue')
-    plt.title("Which Metrics Drive the Performance Score?")
+    # Filter for top 20 most influential metrics for a cleaner plot
+    top_correlations = correlations.abs().sort_values(ascending=False).head(20)
+    top_corr_signed = correlations[top_correlations.index]
+
+    plt.figure(figsize=(12, 8))
+    top_corr_signed.sort_values().plot(kind='barh', color='salmon')
+    plt.title("Which Metrics Drive the VAE Performance Score?")
     plt.xlabel("Correlation with Score")
+    plt.axvline(x=0, color='black', linestyle='-', linewidth=1)
     plt.grid(axis='x', linestyle='--', alpha=0.7)
     plt.tight_layout()
     plt.show()
 
-    print("\nAnalysis Complete. Score distribution and influence plot generated.")
+    print("\nVAE Analysis Complete.")
