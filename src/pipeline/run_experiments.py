@@ -17,6 +17,12 @@ def parse_args():
     parser.add_argument("--sample-size", type=int, default=1000000, help="Number of rows used for model experiments.")
     parser.add_argument("--skip-cleaning", action="store_true", help="Use existing clean dataset instead of regenerating it.")
     parser.add_argument("--with-plots", action="store_true", help="Generate plots for autoencoder comparison.")
+    parser.add_argument("--ae-epochs", type=int, default=20, help="Training epochs for each autoencoder variant.")
+    parser.add_argument("--ae-batch-size", type=int, default=2048, help="Batch size for autoencoder training.")
+    parser.add_argument("--ae-patience", type=int, default=3, help="Early stopping patience for autoencoders.")
+    parser.add_argument("--vae-epochs", type=int, default=50, help="Training epochs for VAE.")
+    parser.add_argument("--vae-batch-size", type=int, default=32, help="Batch size for VAE training.")
+    parser.add_argument("--vae-patience", type=int, default=5, help="Early stopping patience for VAE.")
     return parser.parse_args()
 
 def get_extreme_athletes(df_numeric, scores):
@@ -60,13 +66,28 @@ def main():
     print(f"Train/test split: {len(df_train)} train rows, {len(df_test)} test rows")
 
     print("running autoencoder comparison...")
-    autoencoder_results, _ = run_autoencoder_comparison(df_train, df_test, df_numeric)
+    autoencoder_results, _ = run_autoencoder_comparison(
+        df_train,
+        df_test,
+        df_numeric,
+        ae_epochs=args.ae_epochs,
+        ae_batch_size=args.ae_batch_size,
+        ae_patience=args.ae_patience,
+    )
     print("Autoencoder comparison complete.")
 
     pca_result = run_pca(df_train, df_test, df_numeric)
     print(f"PCA complete. Scores shape: {pca_result.scores.shape}")
 
-    vae_result = run_vae(df_train, df_test, df_numeric)
+    vae_result = run_vae(
+        df_train,
+        df_test,
+        df_numeric,
+        epochs=args.vae_epochs,
+        batch_size=args.vae_batch_size,
+        patience=args.vae_patience,
+        verbose=True,
+    )
     print(f"VAE complete. Scores shape: {vae_result.scores.shape}")
 
     comparison_df = build_comparison_table(autoencoder_results, pca_result, vae_result, df_numeric)

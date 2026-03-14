@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
 import numpy as np
-import tensorflow as tf
 from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras import Model, backend as K, layers
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 
 
 @dataclass
@@ -16,84 +17,139 @@ class VAEResult:
     kl_loss: float
 
 
-class Sampling(layers.Layer):
-    def call(self, inputs):
-        z_mean, z_log_var = inputs
-        batch = tf.shape(z_mean)[0]
-        dim = tf.shape(z_mean)[1]
-        epsilon = K.random_normal(shape=(batch, dim))
-        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+class VAE(nn.Module):
+    def __init__(self, input_dim: int, intermediate_dim: int = 32):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim, intermediate_dim // 2),
+            nn.ReLU(),
+        )
+        self.z_mean = nn.Linear(intermediate_dim // 2, 1)
+        self.z_log_var = nn.Linear(intermediate_dim // 2, 1)
+
+        self.decoder = nn.Sequential(
+            nn.Linear(1, intermediate_dim // 2),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim // 2, intermediate_dim),
+            nn.ReLU(),
+            nn.Linear(intermediate_dim, input_dim),
+            nn.Sigmoid(),
+        )
+
+    def encode(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        h = self.encoder(x)
+        return self.z_mean(h), self.z_log_var(h)
+
+    def reparameterize(self, z_mean: torch.Tensor, z_log_var: torch.Tensor) -> torch.Tensor:
+        epsilon = torch.randn_like(z_mean)
+        return z_mean + torch.exp(0.5 * z_log_var) * epsilon
+
+    def decode(self, z: torch.Tensor) -> torch.Tensor:
+        return self.decoder(z)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        z_mean, z_log_var = self.encode(x)
+        z = self.reparameterize(z_mean, z_log_var)
+        reconstruction = self.decode(z)
+        return reconstruction, z_mean, z_log_var
 
 
-def build_vae(input_dim: int, intermediate_dim: int = 32):
-    encoder_inputs = layers.Input(shape=(input_dim,))
-    x = layers.Dense(intermediate_dim, activation="relu")(encoder_inputs)
-    x = layers.Dense(intermediate_dim // 2, activation="relu")(x)
+def _get_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
-    z_mean = layers.Dense(1, name="z_mean")(x)
-    z_log_var = layers.Dense(1, name="z_log_var")(x)
-    z = Sampling()([z_mean, z_log_var])
-
-    encoder = Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
-
-    latent_inputs = layers.Input(shape=(1,))
-    x = layers.Dense(intermediate_dim // 2, activation="relu")(latent_inputs)
-    x = layers.Dense(intermediate_dim, activation="relu")(x)
-    decoder_outputs = layers.Dense(input_dim, activation="sigmoid")(x)
-
-    decoder = Model(latent_inputs, decoder_outputs, name="decoder")
-    return encoder, decoder
+def _to_tensor(data: np.ndarray, device: torch.device) -> torch.Tensor:
+    return torch.tensor(data, dtype=torch.float32, device=device)
 
 
-class VAE(Model):
-    def __init__(self, encoder, decoder, **kwargs):
-        super().__init__(**kwargs)
-        self.encoder = encoder
-        self.decoder = decoder
+def run_vae(
+    df_train,
+    df_test,
+    df_all,
+    epochs: int = 50,
+    batch_size: int = 32,
+    patience: int = 5,
+    min_delta: float = 1e-5,
+    verbose: bool = False,
+) -> VAEResult:
+    if epochs <= 0:
+        raise ValueError("epochs must be > 0")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be > 0")
+    if patience <= 0:
+        raise ValueError("patience must be > 0")
 
-    def train_step(self, data):
-        with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
-            reconstruction = self.decoder(z)
-            recon_loss = tf.reduce_mean(tf.keras.losses.mse(data, reconstruction))
-            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            total_loss = recon_loss + tf.reduce_mean(kl_loss)
-
-        gradients = tape.gradient(total_loss, self.trainable_weights)
-        self.optimizer.apply_gradients(zip(gradients, self.trainable_weights))
-        return {
-            "loss": total_loss,
-            "recon_loss": recon_loss,
-            "kl": tf.reduce_mean(kl_loss),
-        }
-
-
-def run_vae(df_train, df_test, df_all, epochs: int = 50, batch_size: int = 32) -> VAEResult:
     scaler = MinMaxScaler()
     scaled_train = scaler.fit_transform(df_train)
     scaled_test = scaler.transform(df_test)
     scaled_all = scaler.transform(df_all)
 
+    device = _get_device()
     input_dim = scaled_train.shape[1]
-    encoder, decoder = build_vae(input_dim=input_dim)
+    vae = VAE(input_dim=input_dim).to(device)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=1e-3)
 
-    vae = VAE(encoder, decoder)
-    vae.compile(optimizer="adam")
-    vae.fit(scaled_train, epochs=epochs, batch_size=batch_size, verbose=0)
+    train_tensor = _to_tensor(scaled_train, device)
+    train_loader = DataLoader(TensorDataset(train_tensor), batch_size=batch_size, shuffle=True)
+
+    vae.train()
+    best_loss = float("inf")
+    wait = 0
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        for (batch,) in train_loader:
+            optimizer.zero_grad()
+            reconstruction, z_mean, z_log_var = vae(batch)
+            recon_loss = torch.mean((batch - reconstruction) ** 2)
+            kl = -0.5 * (1 + z_log_var - z_mean.pow(2) - torch.exp(z_log_var))
+            kl_loss = torch.mean(kl)
+            total_loss = recon_loss + kl_loss
+            total_loss.backward()
+            optimizer.step()
+            epoch_loss += float(total_loss.item()) * len(batch)
+
+        avg_loss = epoch_loss / len(train_tensor)
+        if verbose:
+            print(f"VAE epoch {epoch + 1}/{epochs} - loss: {avg_loss:.6f}")
+
+        if best_loss - avg_loss > min_delta:
+            best_loss = avg_loss
+            wait = 0
+        else:
+            wait += 1
+            if wait >= patience:
+                if verbose:
+                    print(f"VAE early stopping: no significant improvement for {patience} epochs.")
+                break
 
     # MSE on unseen test data
-    z_mean_test, _, _ = encoder.predict(scaled_test, verbose=0)
-    reconstructed_test = decoder.predict(z_mean_test, verbose=0)
-    mse = float(mean_squared_error(scaled_test, reconstructed_test))
+    vae.eval()
+    test_tensor = _to_tensor(scaled_test, device)
+    with torch.no_grad():
+        z_mean_test, _ = vae.encode(test_tensor)
+        reconstructed_test = vae.decode(z_mean_test)
+
+    reconstructed_test_np = reconstructed_test.cpu().numpy()
+    mse = float(mean_squared_error(scaled_test, reconstructed_test_np))
 
     # Scores and KL for all data (for ranking and reporting)
-    z_mean_all, z_log_var_all, _ = encoder.predict(scaled_all, verbose=0)
-    kl_loss = float(np.mean(-0.5 * (1 + z_log_var_all - np.square(z_mean_all) - np.exp(z_log_var_all))))
+    all_tensor = _to_tensor(scaled_all, device)
+    with torch.no_grad():
+        z_mean_all, z_log_var_all = vae.encode(all_tensor)
+
+    z_mean_all_np = z_mean_all.cpu().numpy()
+    z_log_var_all_np = z_log_var_all.cpu().numpy()
+    kl_loss = float(np.mean(-0.5 * (1 + z_log_var_all_np - np.square(z_mean_all_np) - np.exp(z_log_var_all_np))))
 
     return VAEResult(
         name="vae",
         architecture="Input -> Dense -> z_mean(1) -> Dense -> Output",
         mse=mse,
-        scores=z_mean_all.flatten(),
+        scores=z_mean_all_np.flatten(),
         kl_loss=kl_loss,
     )
