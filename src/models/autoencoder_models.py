@@ -5,6 +5,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.layers import Dense, Input
 from tensorflow.keras.models import Model
+from src.data.read_data import load_clean_numeric_data,prepare_clean_data
 
 
 @dataclass
@@ -55,9 +56,18 @@ def run_autoencoder_comparison(df_numeric) -> tuple[list[AutoencoderResult], np.
 
     configs = [
         ("simple_autoencoder", []),
-        ("medium_autoencoder", [16]),
-        ("deep_autoencoder", [32, 16, 8]),
+        ("medium_autoencoder", [4]),
+        ("deep_autoencoder", [5,3]),
     ]
 
     results = [run_autoencoder(scaled_data, layers, name) for name, layers in configs]
     return results, scaled_data
+
+
+if __name__ == "__main__":
+    # prepare_clean_data()
+    cleaned_df = load_clean_numeric_data()
+    print('running autoencoder comparison...')
+    results, scaled_data = run_autoencoder_comparison(cleaned_df)
+    for res in results:
+        print(f"{res.name}: MSE={res.mse:.6f}, Architecture={res.architecture}")
