@@ -14,19 +14,22 @@ sns.set_theme(style="whitegrid", palette="muted")
 plt.rcParams["figure.dpi"] = 300
 
 
-def plot_mse_comparison(autoencoder_results, output_path: Path | None = None) -> Path:
+def plot_mse_comparison(
+    model_results,
+    output_path: Path | None = None,
+) -> Path:
     if output_path is None:
         output_path = PLOTS_DIR / "mse_comparison.png"
 
-    model_names = [result.name for result in autoencoder_results]
-    mse_values = [result.mse for result in autoencoder_results]
+    model_names = [result.name for result in model_results]
+    mse_values = [result.mse for result in model_results]
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     plt.figure(figsize=(10, 6))
     ax = sns.barplot(x=model_names, y=mse_values, hue=model_names, palette="viridis", legend=False)
-    plt.title("Porównanie Błędu Rekonstrukcji (MSE)")
-    plt.ylabel("Mean Squared Error")
+    plt.title("Porównanie rekonstrukcji modeli (MSE)")
+    plt.ylabel("Reconstruction MSE")
 
     for index, value in enumerate(mse_values):
         ax.text(index, value + (max(mse_values) * 0.01), f"{value:.6f}", ha="center", fontweight="bold")
@@ -37,18 +40,46 @@ def plot_mse_comparison(autoencoder_results, output_path: Path | None = None) ->
     return output_path
 
 
-def plot_model_agreement(simple_scores, deep_scores, output_path: Path | None = None) -> Path:
+def plot_latent_score_comparison(comparison_df: pd.DataFrame, output_path: Path | None = None) -> Path:
+    if output_path is None:
+        output_path = PLOTS_DIR / "latent_score_comparison.png"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    plot_df = comparison_df[["Model", "Latent Score vs Pace (Spearman)", "Latent Score vs HR (Spearman)"]].melt(
+        id_vars="Model",
+        var_name="Metric",
+        value_name="Value",
+    )
+
+    plt.figure(figsize=(12, 6))
+    ax = sns.barplot(data=plot_df, x="Model", y="Value", hue="Metric", palette="crest")
+    plt.title("Porównanie jakości latent score")
+    plt.ylabel("Spearman correlation")
+    plt.xlabel("Model")
+    plt.axhline(0, color="black", linewidth=0.8)
+
+    for container in ax.containers:
+        ax.bar_label(container, fmt="%.3f", padding=3)
+
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    return output_path
+
+
+def plot_model_agreement(model_scores: dict[str, object], output_path: Path | None = None) -> Path:
     if output_path is None:
         output_path = PLOTS_DIR / "model_agreement.png"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    scores_df = pd.DataFrame(model_scores)
+    corr = scores_df.corr(method="spearman")
+
     plt.figure(figsize=(10, 8))
-    plt.scatter(simple_scores, deep_scores, alpha=0.4, c=deep_scores, cmap="coolwarm", edgecolors="w", linewidth=0.5)
-    plt.title("Korelacja Wyników: Simple vs Deep Autoencoder")
-    plt.xlabel("Performance Score (Simple)")
-    plt.ylabel("Performance Score (Deep)")
-    plt.colorbar(label="Skala Performance Score")
+    sns.heatmap(corr, annot=True, fmt=".2f", cmap="coolwarm", vmin=-1, vmax=1, square=True)
+    plt.title("Macierz zgodności latent score (Spearman)")
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
@@ -62,7 +93,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | Non
     Argumenty:
         comparison_data (pd.DataFrame): DataFrame zawierający dane porównawcze.
             Oczekuje kolumn: 'Athlete Label', 'Average Speed [km/h]',
-            'Average Power [W]', 'Average Heart Rate [bpm]'.
+            'Elevation Gain [m]', 'Average Heart Rate [bpm]'.
             Kolumna 'Athlete Label' powinna zawierać opisy (np. 'Lider 1', 'Outsider 1').
         output_path (Path | None): Ścieżka do zapisu pliku PNG. Jeśli None,
             używa domyślnej lokalizacji w PLOTS_DIR.
@@ -76,8 +107,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | Non
     # Przygotowanie danych do wizualizacji - transpozycja, aby uzyskać format long
     # co jest preferowane przez Seaborn (dla łatwego grupowania i definiowania osi)
     # columns_to_plot to lista metryk do wykreślenia
-    columns_to_plot = ['Average Speed [km/h]', 'Average Power [W]', 'Average Heart Rate [bpm]']
-    labels = comparison_data['Athlete Label']
+    columns_to_plot = ['Average Speed [km/h]', 'Elevation Gain [m]', 'Average Heart Rate [bpm]']
 
     # Transformacja danych do formatu "długiego" (long)
     # co ułatwia pracę z seaborn i matplotlib dla zagnieżdżonych wykresów
@@ -96,7 +126,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | Non
     # Lista metryk i jednostek do tytułów osi Y (opcjonalne)
     metrics_titles = [
         "Prędkość Średnia [km/h]",
-        "Moc Średnia [W]",
+        "Przewyższenie [m]",
         "Tętno Średnie [bpm]"
     ]
 
@@ -133,8 +163,8 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | Non
              ax.set_ylim(0, 160) # Na przykład dla tętna
         elif metric == 'Average Speed [km/h]':
             ax.set_ylim(0, 35)
-        elif metric == 'Average Power [W]':
-            ax.set_ylim(0, 250)
+        elif metric == 'Elevation Gain [m]':
+            ax.set_ylim(0, 1200)
 
     # Tytuł całej figury (u góry)
     fig.suptitle("Fizjologiczny Profil Skrajnych Zawodników (Wartości Rzeczywiste)", fontsize=16)

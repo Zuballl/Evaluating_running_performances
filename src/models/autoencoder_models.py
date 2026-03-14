@@ -16,11 +16,11 @@ class AutoencoderResult:
     mse: float
     scores: np.ndarray
 
-def run_autoencoder(data: np.ndarray, hidden_layers: list[int], name: str) -> AutoencoderResult:
+def run_autoencoder(train_data: np.ndarray, test_data: np.ndarray, all_data: np.ndarray, hidden_layers: list[int], name: str) -> AutoencoderResult:
     # Clear memory from previous model runs
     K.clear_session()
     
-    input_dim = data.shape[1]
+    input_dim = train_data.shape[1]
     input_layer = Input(shape=(input_dim,))
 
     # Encoder path
@@ -43,22 +43,21 @@ def run_autoencoder(data: np.ndarray, hidden_layers: list[int], name: str) -> Au
     model.compile(optimizer="adam", loss="mse")
 
     print(f"\n>>> Training {name}...")
-    # Increased batch_size and enabled verbose progress bar
     model.fit(
-        data, 
-        data, 
-        epochs=20,          # Reduced slightly for speed, 50 is often overkill for AE
-        batch_size=2048,    # ESSENTIAL for 1.7M rows
-        verbose=1           # Shows progress bar
+        train_data,
+        train_data,
+        epochs=20,
+        batch_size=2048,
+        verbose=1
     )
 
-    print(f">>> Generating predictions and scores for {name}...")
-    reconstructed = model.predict(data, batch_size=4096, verbose=1)
-    mse = float(mean_squared_error(data, reconstructed))
+    print(f">>> Evaluating {name} on test set...")
+    reconstructed_test = model.predict(test_data, batch_size=4096, verbose=1)
+    mse = float(mean_squared_error(test_data, reconstructed_test))
 
-    # Extract the encoder part to get the performance scores
+    # Extract the encoder part to generate performance scores for ALL data
     encoder = Model(input_layer, bottleneck)
-    scores = encoder.predict(data, batch_size=4096, verbose=1).flatten()
+    scores = encoder.predict(all_data, batch_size=4096, verbose=1).flatten()
 
     # Clean up model objects to save RAM
     del model
@@ -71,10 +70,12 @@ def run_autoencoder(data: np.ndarray, hidden_layers: list[int], name: str) -> Au
 
     return AutoencoderResult(name=name, architecture=architecture, mse=mse, scores=scores)
 
-def run_autoencoder_comparison(df_numeric) -> tuple[list[AutoencoderResult], np.ndarray]:
-    print(f"Scaling data with shape {df_numeric.shape}...")
+def run_autoencoder_comparison(df_train, df_test, df_all) -> tuple[list[AutoencoderResult], np.ndarray]:
+    print(f"Scaling data: train={df_train.shape}, test={df_test.shape}, all={df_all.shape}")
     scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(df_numeric)
+    scaled_train = scaler.fit_transform(df_train)
+    scaled_test = scaler.transform(df_test)
+    scaled_all = scaler.transform(df_all)
 
     configs = [
         ("simple_autoencoder", []),
@@ -84,10 +85,10 @@ def run_autoencoder_comparison(df_numeric) -> tuple[list[AutoencoderResult], np.
 
     results = []
     for name, layers in configs:
-        res = run_autoencoder(scaled_data, layers, name)
+        res = run_autoencoder(scaled_train, scaled_test, scaled_all, layers, name)
         results.append(res)
         
-    return results, scaled_data
+    return results, scaled_all
 
 if __name__ == "__main__":
     # If running directly, load the data

@@ -1,7 +1,19 @@
+from dataclasses import dataclass
+
 import numpy as np
 import tensorflow as tf
+from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras import Model, backend as K, layers
+
+
+@dataclass
+class VAEResult:
+    name: str
+    architecture: str
+    mse: float
+    scores: np.ndarray
+    kl_loss: float
 
 
 class Sampling(layers.Layer):
@@ -56,16 +68,32 @@ class VAE(Model):
         }
 
 
-def run_vae(df_numeric, epochs: int = 50, batch_size: int = 32) -> np.ndarray:
+def run_vae(df_train, df_test, df_all, epochs: int = 50, batch_size: int = 32) -> VAEResult:
     scaler = MinMaxScaler()
-    scaled_data = scaler.fit_transform(df_numeric)
+    scaled_train = scaler.fit_transform(df_train)
+    scaled_test = scaler.transform(df_test)
+    scaled_all = scaler.transform(df_all)
 
-    input_dim = scaled_data.shape[1]
+    input_dim = scaled_train.shape[1]
     encoder, decoder = build_vae(input_dim=input_dim)
 
     vae = VAE(encoder, decoder)
     vae.compile(optimizer="adam")
-    vae.fit(scaled_data, epochs=epochs, batch_size=batch_size, verbose=0)
+    vae.fit(scaled_train, epochs=epochs, batch_size=batch_size, verbose=0)
 
-    z_mean, _, _ = encoder.predict(scaled_data, verbose=0)
-    return z_mean.flatten()
+    # MSE on unseen test data
+    z_mean_test, _, _ = encoder.predict(scaled_test, verbose=0)
+    reconstructed_test = decoder.predict(z_mean_test, verbose=0)
+    mse = float(mean_squared_error(scaled_test, reconstructed_test))
+
+    # Scores and KL for all data (for ranking and reporting)
+    z_mean_all, z_log_var_all, _ = encoder.predict(scaled_all, verbose=0)
+    kl_loss = float(np.mean(-0.5 * (1 + z_log_var_all - np.square(z_mean_all) - np.exp(z_log_var_all))))
+
+    return VAEResult(
+        name="vae",
+        architecture="Input -> Dense -> z_mean(1) -> Dense -> Output",
+        mse=mse,
+        scores=z_mean_all.flatten(),
+        kl_loss=kl_loss,
+    )

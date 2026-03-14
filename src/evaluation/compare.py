@@ -7,37 +7,64 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_METRICS_PATH = ROOT_DIR / "outputs" / "metrics" / "model_comparison.csv"
 
 
-def build_comparison_table(autoencoder_results, include_vae: bool, include_tsne: bool) -> pd.DataFrame:
+def _safe_spearman(left: pd.Series, right: pd.Series) -> float:
+    value = left.corr(right, method="spearman")
+    if pd.isna(value):
+        return 0.0
+    return float(value)
+
+
+def _build_row(name: str, architecture: str, mse: float, scores, df_numeric: pd.DataFrame, notes: str) -> dict[str, object]:
+    pace_corr = _safe_spearman(pd.Series(scores), df_numeric["pace_min_km"])
+    hr_corr = _safe_spearman(pd.Series(scores), df_numeric["average_hr"])
+    latent_score_quality = (abs(pace_corr) + abs(hr_corr)) / 2
+
+    return {
+        "Model": name,
+        "Architecture": architecture,
+        "Reconstruction MSE": round(float(mse), 6),
+        "Latent Score vs Pace (Spearman)": round(pace_corr, 6),
+        "Latent Score vs HR (Spearman)": round(hr_corr, 6),
+        "Latent Score Quality": round(latent_score_quality, 6),
+        "Notes": notes,
+    }
+
+
+def build_comparison_table(autoencoder_results, pca_result, vae_result, df_numeric: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for result in autoencoder_results:
         rows.append(
-            {
-                "Model Approach": result.name,
-                "Architecture": result.architecture,
-                "MSE / Metric": f"{result.mse:.6f}",
-                "Best For": "Autoencoder ranking",
-            }
+            _build_row(
+                name=result.name,
+                architecture=result.architecture,
+                mse=result.mse,
+                scores=result.scores,
+                df_numeric=df_numeric,
+                notes="Autoencoder bottleneck score",
+            )
         )
 
-    if include_vae:
-        rows.append(
-            {
-                "Model Approach": "vae",
-                "Architecture": "Probabilistic latent space",
-                "MSE / Metric": "N/A (KL + recon)",
-                "Best For": "Smooth latent distribution",
-            }
+    rows.append(
+        _build_row(
+            name=pca_result.name,
+            architecture=pca_result.architecture,
+            mse=pca_result.mse,
+            scores=pca_result.scores,
+            df_numeric=df_numeric,
+            notes=f"Explained variance={pca_result.explained_variance_ratio:.6f}",
         )
+    )
 
-    if include_tsne:
-        rows.append(
-            {
-                "Model Approach": "tsne",
-                "Architecture": "Manifold learning",
-                "MSE / Metric": "N/A",
-                "Best For": "Cluster visualization",
-            }
+    rows.append(
+        _build_row(
+            name=vae_result.name,
+            architecture=vae_result.architecture,
+            mse=vae_result.mse,
+            scores=vae_result.scores,
+            df_numeric=df_numeric,
+            notes=f"KL proxy={vae_result.kl_loss:.6f}",
         )
+    )
 
     return pd.DataFrame(rows)
 

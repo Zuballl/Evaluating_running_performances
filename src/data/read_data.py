@@ -9,7 +9,7 @@ RAW_DATA_PATH = ROOT_DIR / "data" / "activities.csv"
 PROCESSED_DATA_PATH = ROOT_DIR / "data" / "processed" / "clean_data.csv"
 
 
-CRUCIAL_COLUMNS = ["average_hr", "average_cad", "average_speed", "total_distance"]
+CRUCIAL_COLUMNS = ["average_hr", "final_cadence", "average_speed", "total_distance"]
 COLUMNS_TO_DROP = [
     "date",
     "yob",
@@ -22,27 +22,6 @@ COLUMNS_TO_DROP = [
     "trimp_points",
 ]
 
-
-# 1. Define exactly what you want to keep
-COLUMNS_TO_KEEP = [
-    "average_hr", 
-    "average_speed", 
-    "total_distance", 
-    "pace_min_km", 
-    "age", 
-    "is_male", 
-    "elevation_gain"
-]
-
-COLUMNS_TO_KEEP = [
-    "average_hr", 
-    "average_speed", 
-    "total_distance", 
-    "pace_min_km", 
-    "is_male", 
-    "elevation_gain"
-]
-
 def prepare_clean_data(
     raw_data_path: Path = RAW_DATA_PATH,
     processed_data_path: Path = PROCESSED_DATA_PATH,
@@ -50,26 +29,21 @@ def prepare_clean_data(
     df = pd.read_csv(raw_data_path)
     df.columns = df.columns.str.strip()
 
-    # 1. Basic Cleaning & Calculations
-    # Replace 0 with NaN to avoid infinity in pace calculation
-    df["pace_min_km"] = 60 / df["average_speed"].replace(0, np.nan)
+    df.dropna(subset=CRUCIAL_COLUMNS, inplace=True)
+
+    df["pace_min_km"] = 60 / df["average_speed"]
+
+    df["date"] = pd.to_datetime(df["date"])
+    df["age"] = df["date"].dt.year - df["yob"]
+
     df["is_male"] = np.where(df["gender"] == "M", 1, 0)
+
+    df.drop(columns=COLUMNS_TO_DROP, inplace=True)
+
     df["elevation_gain"] = df["elevation_gain"].fillna(0)
+    median_aerobic_decoupling = df["aerobic_decoupling"].median()
+    df["aerobic_decoupling"] = df["aerobic_decoupling"].fillna(median_aerobic_decoupling)
 
-    # 2. SELECT ONLY THE TARGET COLUMNS
-    # This automatically drops all the extra columns you didn't want
-    existing_keeps = [c for c in COLUMNS_TO_KEEP if c in df.columns]
-    df = df[existing_keeps].copy()
-
-    # 3. DROP ROWS WITH MISSING VALUES
-    # This ensures the Autoencoder won't crash on NaNs
-    initial_len = len(df)
-    df = df.dropna()
-    
-    print(f"Dropped {initial_len - len(df)} rows containing NaNs.")
-    print(f"Final dataset shape: {df.shape}")
-
-    # 4. Save
     processed_data_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(processed_data_path, index=False)
 
