@@ -40,12 +40,6 @@ Analiza błędów rekonstrukcji wykazała, że architektura Medium AE oferuje op
 | **Medium AE** | Input -> 16 -> 1 -> 16 -> Output | **0.009906** | **Optymalny ranking** |
 | **Deep AE** | Input -> 32 -> 16 -> 8 -> 1 -> ... | 0.009911 | Złożone zależności |
 
-#### 3.1 Walidacja Empiryczna
-Walidacja na skrajnych przypadkach potwierdziła fizjologiczną poprawność modelu. Liderzy rankingu (*Performance Score* > 9.0) charakteryzowali się wysoką mocą i prędkością przy zachowaniu niskiego tętna, co jest definicją wysokiej ekonomii wysiłku.
-
-![Profile zawodników](athlete_profiles.png)
-*Rysunek 1: Porównanie kluczowych parametrów dla 5 skrajnych wyników (Top 3 vs Bottom 2).*
-
 ### 4. Wnioski
 Zastosowanie autoenkoderów pozwala na obiektywną ocenę wydajności sportowej bez konieczności ręcznego definiowania wag dla dziesiątek parametrów. Wykazano, że średnio-głębokie sieci neuronowe są najskuteczniejsze w syntezie danych sensorycznych, oferując stabilną podstawę do rankingu zawodników. Proponowany zestaw cech zwiększa interpretowalność wyników poprzez podkreślenie istotnych powiązań między mechaniką ruchu a kosztem biologicznym.
 

@@ -3,6 +3,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+import pandas as pd
+
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 PLOTS_DIR = ROOT_DIR / "outputs" / "plots"
@@ -48,6 +50,96 @@ def plot_model_agreement(simple_scores, deep_scores, output_path: Path | None = 
     plt.ylabel("Performance Score (Deep)")
     plt.colorbar(label="Skala Performance Score")
     plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    return output_path
+
+
+def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | None = None) -> Path:
+    """
+    Tworzy wizualizację profili skrajnych zawodników (rzeczywiste wartości).
+
+    Argumenty:
+        comparison_data (pd.DataFrame): DataFrame zawierający dane porównawcze.
+            Oczekuje kolumn: 'Athlete Label', 'Average Speed [km/h]',
+            'Average Power [W]', 'Average Heart Rate [bpm]'.
+            Kolumna 'Athlete Label' powinna zawierać opisy (np. 'Lider 1', 'Outsider 1').
+        output_path (Path | None): Ścieżka do zapisu pliku PNG. Jeśli None,
+            używa domyślnej lokalizacji w PLOTS_DIR.
+
+    Zwraca:
+        Path: Ścieżka do zapisu wygenerowanego pliku PNG.
+    """
+    if output_path is None:
+        output_path = PLOTS_DIR / "athlete_profiles.png"
+
+    # Przygotowanie danych do wizualizacji - transpozycja, aby uzyskać format long
+    # co jest preferowane przez Seaborn (dla łatwego grupowania i definiowania osi)
+    # columns_to_plot to lista metryk do wykreślenia
+    columns_to_plot = ['Average Speed [km/h]', 'Average Power [W]', 'Average Heart Rate [bpm]']
+    labels = comparison_data['Athlete Label']
+
+    # Transformacja danych do formatu "długiego" (long)
+    # co ułatwia pracę z seaborn i matplotlib dla zagnieżdżonych wykresów
+    data_long = pd.melt(comparison_data,
+                         id_vars=['Athlete Label'],
+                         value_vars=columns_to_plot,
+                         var_name='Metric',
+                         value_name='Value')
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Inicjalizacja figury matplotlib
+    # Używamy subplots, aby łatwo kontrolować poszczególne wykresy barplot
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(18, 6), sharex=True)
+
+    # Lista metryk i jednostek do tytułów osi Y (opcjonalne)
+    metrics_titles = [
+        "Prędkość Średnia [km/h]",
+        "Moc Średnia [W]",
+        "Tętno Średnie [bpm]"
+    ]
+
+    # Lista metryk do iteracji po kolumnach
+    for i, (metric, title) in enumerate(zip(columns_to_plot, metrics_titles)):
+        # Przypisanie osi dla konkretnej metryki
+        ax = axs[i]
+
+        # Wybierz dane dla danej metryki
+        metric_data = data_long[data_long['Metric'] == metric]
+
+        # Tworzenie barplotu dla danej metryki
+        # sns.barplot(x=labels, y=metric_data['Value'], ax=ax, hue=labels, palette="muted", legend=False)
+        sns.barplot(data=metric_data, x='Athlete Label', y='Value', ax=ax, hue='Athlete Label', palette="muted", legend=False)
+
+        # Ustawienia osi i tytułów
+        ax.set_title(title)
+        ax.set_xlabel("") # Ukryj etykietę osi X dla przejrzystości
+        ax.set_ylabel("") # Ukryj etykietę osi Y, jednostki są w tytule
+
+        # Dodaj etykiety wartości na górze słupków
+        for bar in ax.patches:
+            # Uzyskaj wartość dla paska
+            value = bar.get_height()
+            # Dodaj tekst nad paskiem, wyrównany do środka i pogrubiony
+            ax.text(bar.get_x() + bar.get_width() / 2, # x-coordinate of the text
+                    value + (max(metric_data['Value']) * 0.01), # y-coordinate of the text
+                    f"{value:.1f}", # formatted value string
+                    ha='center', # horizontal alignment
+                    fontweight="bold") # font weight
+
+        # Opcjonalnie: dostosuj zakres osi Y dla lepszej prezentacji danych (np. dla tętna)
+        if metric == 'Average Heart Rate [bpm]':
+             ax.set_ylim(0, 160) # Na przykład dla tętna
+        elif metric == 'Average Speed [km/h]':
+            ax.set_ylim(0, 35)
+        elif metric == 'Average Power [W]':
+            ax.set_ylim(0, 250)
+
+    # Tytuł całej figury (u góry)
+    fig.suptitle("Fizjologiczny Profil Skrajnych Zawodników (Wartości Rzeczywiste)", fontsize=16)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95]) # Dostosuj layout dla lepszej prezentacji, pozostawiając miejsce na suptitle
     plt.savefig(output_path)
     plt.close()
     return output_path
