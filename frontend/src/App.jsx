@@ -12,7 +12,6 @@ const FIELD_LABELS = {
 
 const FEATURE_DISPLAY = {
   pace_min_km: 'Pace [min/km]',
-  average_speed: 'Average Speed [km/h]',
   athlete_weight: 'Athlete Weight [kg]',
   total_distance: 'Total Distance [km]',
   average_hr: 'Average HR [bpm]',
@@ -25,7 +24,6 @@ const FEATURE_DISPLAY = {
 
 const FEATURE_HELP = {
   pace_min_km: 'Average minutes needed to run 1 km. Lower is faster.',
-  average_speed: 'Average speed during activity in kilometers per hour.',
   athlete_weight: 'Body mass used in the model context (kilograms).',
   total_distance: 'Total covered distance in kilometers.',
   average_hr: 'Average heart rate in beats per minute.',
@@ -132,7 +130,7 @@ function App() {
           <p className="eyebrow">Running Performance</p>
           <h1>PCA Score + XAI</h1>
           <p className="subtitle">
-            Upload a Garmin FIT file and get score, percentile, and feature contributions.
+            Upload a Garmin FIT file and get a calibrated 0-10 score, percentile, and feature contributions.
           </p>
         </header>
 
@@ -179,7 +177,7 @@ function App() {
           <section className="result-panel">
             <div className="score-strip">
               <div>
-                <p className="metric-label">Score</p>
+                <p className="metric-label">Score / 10</p>
                 <p className="metric-value">{result.score.toFixed(3)}</p>
               </div>
               <div>

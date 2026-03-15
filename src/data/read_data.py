@@ -20,6 +20,7 @@ COLUMNS_TO_DROP = [
     "average_cad",
     "average_run_cad",
     "trimp_points",
+    "average_speed",
 ]
 
 def prepare_clean_data(
@@ -29,9 +30,11 @@ def prepare_clean_data(
     df = pd.read_csv(raw_data_path)
     df.columns = df.columns.str.strip()
 
+
     df.dropna(subset=CRUCIAL_COLUMNS, inplace=True)
 
     df["pace_min_km"] = 60 / df["average_speed"]
+
 
     df["date"] = pd.to_datetime(df["date"])
     df["age"] = df["date"].dt.year - df["yob"]

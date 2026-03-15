@@ -13,7 +13,6 @@ from fitparse import FitFile
 class ParsedFitMetrics:
     total_distance: float | None = None
     elevation_gain: float | None = None
-    average_speed: float | None = None
     average_hr: float | None = None
     aerobic_decoupling: float | None = None
     athlete_weight: float | None = None
@@ -55,14 +54,13 @@ def parse_fit_metrics(content: bytes) -> ParsedFitMetrics:
 
     total_distance = float(total_distance_m) / 1000.0 if _is_positive_number(total_distance_m) else None
     elevation_gain = float(elevation_gain_m) if elevation_gain_m is not None else None
-    average_speed = float(avg_speed_m_s) * 3.6 if _is_positive_number(avg_speed_m_s) else None
-    pace_min_km = (60.0 / average_speed) if _is_positive_number(average_speed) else None
+    session_speed_kmh = float(avg_speed_m_s) * 3.6 if _is_positive_number(avg_speed_m_s) else None
+    pace_min_km = (60.0 / session_speed_kmh) if _is_positive_number(session_speed_kmh) else None
     aerobic_decoupling = _compute_aerobic_decoupling(fit)
 
     return ParsedFitMetrics(
         total_distance=total_distance,
         elevation_gain=elevation_gain,
-        average_speed=average_speed,
         average_hr=float(average_hr) if average_hr is not None else None,
         aerobic_decoupling=aerobic_decoupling,
         athlete_weight=float(athlete_weight) if athlete_weight is not None else None,

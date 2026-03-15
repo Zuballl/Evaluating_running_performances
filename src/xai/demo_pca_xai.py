@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "JSON object with feature values, e.g. "
-            "'{\"average_hr\":150,\"average_speed\":11,...}'."
+            "'{\"average_hr\":150,\"pace_min_km\":5.2,...}'."
         ),
     )
     parser.add_argument(
@@ -78,6 +78,7 @@ def main() -> None:
     if args.output_json:
         payload = {
             "score": result.score,
+            "raw_score": result.raw_score,
             "percentile": result.percentile,
             "top_contributions": top_contributions_df.to_dict(orient="records"),
         }
@@ -85,6 +86,7 @@ def main() -> None:
         return
 
     print(f"score={result.score:.6f}")
+    print(f"raw_score={result.raw_score:.6f}")
     print(f"percentile={result.percentile:.2f}")
     print("top_contributions:")
     print(top_contributions_df.to_string(index=False))

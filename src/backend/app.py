@@ -17,7 +17,6 @@ from src.xai.pca_xai import PCAExplainer, explain_sample, fit_pca_explainer
 class PredictRequest(BaseModel):
     total_distance: float = Field(..., ge=0)
     elevation_gain: float
-    average_speed: float = Field(..., ge=0)
     average_hr: float = Field(..., ge=0)
     aerobic_decoupling: float
     athlete_weight: float = Field(..., ge=0)
@@ -35,6 +34,7 @@ class ContributionItem(BaseModel):
 
 class PredictResponse(BaseModel):
     score: float
+    raw_score: float
     percentile: float
     top_contributions: list[ContributionItem]
 
@@ -96,7 +96,6 @@ async def predict_fit(
     features: dict[str, Any] = {
         "total_distance": parsed.total_distance,
         "elevation_gain": parsed.elevation_gain,
-        "average_speed": parsed.average_speed,
         "average_hr": parsed.average_hr,
         "aerobic_decoupling": parsed.aerobic_decoupling,
         "athlete_weight": parsed.athlete_weight if parsed.athlete_weight is not None else athlete_weight,
@@ -125,6 +124,7 @@ def _predict_from_features(features: dict[str, Any], top_k: int, preprocessing: 
         top_contributions = [ContributionItem(**row) for row in top_df.to_dict(orient="records")]
         return PredictResponse(
             score=result.score,
+            raw_score=result.raw_score,
             percentile=result.percentile,
             top_contributions=top_contributions,
         )

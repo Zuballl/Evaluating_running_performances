@@ -15,6 +15,8 @@ class PCAExplainer:
     scaler: MinMaxScaler | StandardScaler
     pca: PCA
     reference_scores: np.ndarray
+    reference_score_min: float
+    reference_score_max: float
     preprocessing: str
     clip_lower: np.ndarray | None
     clip_upper: np.ndarray | None
@@ -23,6 +25,7 @@ class PCAExplainer:
 @dataclass
 class PCAExplanation:
     score: float
+    raw_score: float
     percentile: float
     contributions: pd.DataFrame
 
@@ -64,6 +67,8 @@ def fit_pca_explainer(
         scaler=scaler,
         pca=pca,
         reference_scores=reference_scores,
+        reference_score_min=float(np.min(reference_scores)),
+        reference_score_max=float(np.max(reference_scores)),
         preprocessing=preprocessing,
         clip_lower=clip_lower,
         clip_upper=clip_upper,
@@ -86,8 +91,9 @@ def explain_sample(explainer: PCAExplainer, sample: pd.Series | Mapping[str, flo
     component = explainer.pca.components_[0]
 
     contribution_values = centered_row * component
-    score = float(np.sum(contribution_values))
-    percentile = _score_percentile(score, explainer.reference_scores)
+    raw_score = float(np.sum(contribution_values))
+    score = _normalize_score(raw_score, explainer.reference_score_min, explainer.reference_score_max)
+    percentile = _score_percentile(raw_score, explainer.reference_scores)
 
     abs_values = np.abs(contribution_values)
     abs_sum = float(np.sum(abs_values))
@@ -108,6 +114,7 @@ def explain_sample(explainer: PCAExplainer, sample: pd.Series | Mapping[str, flo
 
     return PCAExplanation(
         score=score,
+        raw_score=raw_score,
         percentile=percentile,
         contributions=contributions.reset_index(drop=True),
     )
@@ -155,3 +162,10 @@ def _score_percentile(score: float, reference_scores: np.ndarray) -> float:
         return 0.0
     below_or_equal = float(np.mean(reference_scores <= score))
     return below_or_equal * 100.0
+
+
+def _normalize_score(score: float, reference_min: float, reference_max: float) -> float:
+    if reference_max <= reference_min:
+        return 0.0
+    normalized = (score - reference_min) / (reference_max - reference_min)
+    return float(np.clip(normalized * 10.0, 0.0, 10.0))
