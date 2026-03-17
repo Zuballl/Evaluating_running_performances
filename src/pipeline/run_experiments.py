@@ -4,7 +4,7 @@ from pathlib import Path
 from sklearn.model_selection import train_test_split
 
 from src.data.read_data import PROCESSED_DATA_PATH, load_clean_numeric_data, prepare_clean_data
-from src.evaluation.compare import build_comparison_table, save_comparison_table
+from src.evaluation.compare import build_comparison_table, save_comparison_table, rank_features_for_scores
 from src.models.autoencoder_models import run_autoencoder_comparison
 from src.models.pca_model import run_pca
 from src.models.vae_model import run_vae
@@ -26,33 +26,74 @@ def parse_args():
     return parser.parse_args()
 
 def get_extreme_athletes(df_numeric, scores):
+    """
+    Extracts top 3 and bottom 3 athletes based on scores.
+    Returns both the extreme athletes DataFrame and the top 3 features by correlation.
+    """
     # Dodajemy wyniki do kopii danych, aby móc je posortować
     df_with_scores = df_numeric.copy()
-    df_with_scores['performance_score'] = scores
-    
+    df_with_scores["performance_score"] = scores
+
     # Sortujemy: od najlepszych do najgorszych
-    df_sorted = df_with_scores.sort_values(by='performance_score', ascending=False)
-    
-    # Wybieramy Top 3 i Bottom 2
+    df_sorted = df_with_scores.sort_values(by="performance_score", ascending=False)
+
+    # Wybieramy Top 3 i Bottom 3
     top_3 = df_sorted.head(3).copy()
-    bottom_2 = df_sorted.tail(2).copy()
-    
+    bottom_3 = df_sorted.tail(3).copy()
+
     # Nadajemy etykiety dla wykresu
-    top_3['Athlete Label'] = [f"Lider {i+1}" for i in range(3)]
-    bottom_2['Athlete Label'] = [f"Outsider {i+1}" for i in reversed(range(2))]
-    
+    top_3["Athlete Label"] = [f"Lider {i+1}" for i in range(3)]
+    bottom_3["Athlete Label"] = [f"Outsider {i+1}" for i in reversed(range(3))]
+
     # Łączymy w jeden DataFrame do wykresu
-    extreme_df = pd.concat([top_3, bottom_2])
+    extreme_df = pd.concat([top_3, bottom_3])
+
+    # Obliczamy TOP 3 features na podstawie łączonego wpływu (Spearman + Kendall + MI + permutation importance)
+    top_3_features = rank_features_for_scores(scores, df_numeric, top_n=3)
+    top_3_feature_names = [feature["feature"] for feature in top_3_features]
     
-    # Mapujemy Twoje nazwy kolumn na te używane w funkcji plot_athlete_profiles
-    # Dostosuj nazwy 'average_speed' itp. do tych, które masz w df_numeric
+    print("\nTOP 3 features by combined impact on scores:")
+    for feature in top_3_features:
+        print(
+            f"  {feature['feature']}: combined={feature['combined_impact']:.6f}, "
+            f"spearman={feature['spearman']:.6f}, kendall={feature['kendall']:.6f}, "
+            f"mi={feature['mutual_info']:.6f}, perm={feature['permutation_importance']:.6f}"
+        )
+
+    # Mapujemy nazwy kolumn
     column_mapping = {
-        'average_speed': 'Average Speed [km/h]',
-        'average_hr': 'Average Heart Rate [bpm]',
-        'elevation_gain': 'Elevation Gain [m]'
+        "pace_min_km": "Pace [min/km]",
+        "average_hr": "Average Heart Rate [bpm]",
+        "elevation_gain": "Elevation Gain [m]",
+        "total_distance": "Total Distance [km]",
+        "final_cadence": "Final Cadence [spm]",
+        "aerobic_decoupling": "Aerobic Decoupling [%]",
+        "age": "Age [years]",
+        "is_male": "Sex (Male=1, Female=0)",
+        "athlete_weight": "Athlete Weight [kg]",
     }
+
+    renamed_extreme_df = extreme_df.rename(columns=column_mapping)
+    mapped_features = [column_mapping.get(feat, feat) for feat in top_3_feature_names]
     
-    return extreme_df.rename(columns=column_mapping)
+    return renamed_extreme_df, mapped_features
+
+
+def get_top_features_per_model(model_results, df_numeric):
+    """
+    Oblicza TOP 3 features dla każdego modelu na podstawie łączonego wpływu.
+    
+    Returns:
+        dict: {model_name -> [(feature_name, combined_impact), ...]}
+    """
+    top_features_per_model = {}
+    
+    for result in model_results:
+        top_features = rank_features_for_scores(result.scores, df_numeric, top_n=3)
+        top_3 = [(feature["feature"], float(feature["combined_impact"])) for feature in top_features]
+        top_features_per_model[result.name] = top_3
+    
+    return top_features_per_model
 
 def main():
     args = parse_args()
@@ -98,16 +139,21 @@ def main():
     
     # 2. Wybieramy skrajne przypadki na podstawie rzeczywistych danych
     print("Identyfikacja liderów i outsiderów...")
-    extreme_athletes_df = get_extreme_athletes(df_numeric, best_model_results.scores)
+    extreme_athletes_df, top_features = get_extreme_athletes(df_numeric, best_model_results.scores)
     
     # 3. Generujemy profilowy wykres słupkowy
     from src.visualization.plots import plot_athlete_profiles
-    profile_plot = plot_athlete_profiles(extreme_athletes_df)
+    profile_plot = plot_athlete_profiles(extreme_athletes_df, features_to_plot=top_features)
     
     # Reszta Twoich wykresów...
     model_results = [*autoencoder_results, pca_result, vae_result]
     mse_plot = plot_mse_comparison(model_results)
-    latent_plot = plot_latent_score_comparison(comparison_df)
+    
+    # Nowy wykres z TOP features per model
+    top_features_dict = get_top_features_per_model(model_results, df_numeric)
+    from src.visualization.plots import plot_top_features_per_model
+    top_features_plot = plot_top_features_per_model(top_features_dict)
+    
     model_scores = {
         autoencoder_results[0].name: autoencoder_results[0].scores,
         autoencoder_results[1].name: autoencoder_results[1].scores,
@@ -119,7 +165,7 @@ def main():
     
     print(
         "Wszystkie wizualizacje gotowe: "
-        f"{profile_plot}, {mse_plot}, {latent_plot}, {agreement_plot}"
+        f"{profile_plot}, {mse_plot}, {top_features_plot}, {agreement_plot}"
     )
 
     print(f"Saved comparison table: {comparison_path}")

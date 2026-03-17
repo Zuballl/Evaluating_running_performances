@@ -46,7 +46,15 @@ def plot_latent_score_comparison(comparison_df: pd.DataFrame, output_path: Path 
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plot_df = comparison_df[["Model", "Latent Score vs Pace (Spearman)", "Latent Score vs HR (Spearman)"]].melt(
+    impact_columns = [
+        column
+        for column in comparison_df.columns
+        if column.startswith("Top ") and column.endswith("Combined Impact")
+    ]
+    if not impact_columns:
+        raise ValueError("No dynamic combined impact columns found in comparison DataFrame.")
+
+    plot_df = comparison_df[["Model", *impact_columns]].melt(
         id_vars="Model",
         var_name="Metric",
         value_name="Value",
@@ -54,8 +62,8 @@ def plot_latent_score_comparison(comparison_df: pd.DataFrame, output_path: Path 
 
     plt.figure(figsize=(12, 6))
     ax = sns.barplot(data=plot_df, x="Model", y="Value", hue="Metric", palette="crest")
-    plt.title("Porównanie jakości latent score")
-    plt.ylabel("Spearman correlation")
+    plt.title("Porównanie jakości latent score (combined impact)")
+    plt.ylabel("Combined feature impact")
     plt.xlabel("Model")
     plt.axhline(0, color="black", linewidth=0.8)
 
@@ -86,15 +94,15 @@ def plot_model_agreement(model_scores: dict[str, object], output_path: Path | No
     return output_path
 
 
-def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | None = None) -> Path:
+def plot_athlete_profiles(comparison_data: pd.DataFrame, features_to_plot: list[str] | None = None, output_path: Path | None = None) -> Path:
     """
     Tworzy wizualizację profili skrajnych zawodników (rzeczywiste wartości).
 
     Argumenty:
         comparison_data (pd.DataFrame): DataFrame zawierający dane porównawcze.
-            Oczekuje kolumn: 'Athlete Label', 'Average Speed [km/h]',
-            'Elevation Gain [m]', 'Average Heart Rate [bpm]'.
-            Kolumna 'Athlete Label' powinna zawierać opisy (np. 'Lider 1', 'Outsider 1').
+            Oczekuje kolumny 'Athlete Label'.
+        features_to_plot (list[str] | None): Lista cech do wykreślenia. 
+            Jeśli None, używa domyślnych: ["Pace [min/km]", "Elevation Gain [m]", "Average Heart Rate [bpm]"]
         output_path (Path | None): Ścieżka do zapisu pliku PNG. Jeśli None,
             używa domyślnej lokalizacji w PLOTS_DIR.
 
@@ -104,72 +112,131 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, output_path: Path | Non
     if output_path is None:
         output_path = PLOTS_DIR / "athlete_profiles.png"
 
-    # Przygotowanie danych do wizualizacji - transpozycja, aby uzyskać format long
-    # co jest preferowane przez Seaborn (dla łatwego grupowania i definiowania osi)
-    # columns_to_plot to lista metryk do wykreślenia
-    columns_to_plot = ['Average Speed [km/h]', 'Elevation Gain [m]', 'Average Heart Rate [bpm]']
+    if features_to_plot is None:
+        features_to_plot = ['Pace [min/km]', 'Elevation Gain [m]', 'Average Heart Rate [bpm]']
+
+    # Weryfikuj, że wszystkie features istnieją w DataFrame
+    missing_features = [f for f in features_to_plot if f not in comparison_data.columns]
+    if missing_features:
+        raise ValueError(f"Missing features in DataFrame: {missing_features}")
 
     # Transformacja danych do formatu "długiego" (long)
-    # co ułatwia pracę z seaborn i matplotlib dla zagnieżdżonych wykresów
     data_long = pd.melt(comparison_data,
                          id_vars=['Athlete Label'],
-                         value_vars=columns_to_plot,
+                         value_vars=features_to_plot,
                          var_name='Metric',
                          value_name='Value')
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Inicjalizacja figury matplotlib
-    # Używamy subplots, aby łatwo kontrolować poszczególne wykresy barplot
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(18, 6), sharex=True)
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(20, 6), sharex=True)
 
-    # Lista metryk i jednostek do tytułów osi Y (opcjonalne)
-    metrics_titles = [
-        "Prędkość Średnia [km/h]",
-        "Przewyższenie [m]",
-        "Tętno Średnie [bpm]"
-    ]
+    # Mapowanie feature names na bardziej czytalne nazwy (opcjonalnie)
+    feature_titles = {
+        'Pace [min/km]': 'Tempo Biegowe [min/km]',
+        'Elevation Gain [m]': 'Przewyższenie [m]',
+        'Average Heart Rate [bpm]': 'Tętno Średnie [bpm]',
+        'Total Distance [km]': 'Całkowita Odległość [km]',
+        'Final Cadence [spm]': 'Ostateczna Kadencja [spm]',
+        'Aerobic Decoupling [%]': 'Aerobic Decoupling [%]',
+        'Age [years]': 'Wiek [lata]',
+        'Sex (Male=1, Female=0)': 'Płeć (M=1, K=0)',
+        'Athlete Weight [kg]': 'Waga Zawodnika [kg]',
+    }
 
-    # Lista metryk do iteracji po kolumnach
-    for i, (metric, title) in enumerate(zip(columns_to_plot, metrics_titles)):
-        # Przypisanie osi dla konkretnej metryki
+    for i, metric in enumerate(features_to_plot):
         ax = axs[i]
-
-        # Wybierz dane dla danej metryki
         metric_data = data_long[data_long['Metric'] == metric]
 
-        # Tworzenie barplotu dla danej metryki
-        # sns.barplot(x=labels, y=metric_data['Value'], ax=ax, hue=labels, palette="muted", legend=False)
         sns.barplot(data=metric_data, x='Athlete Label', y='Value', ax=ax, hue='Athlete Label', palette="muted", legend=False)
 
-        # Ustawienia osi i tytułów
-        ax.set_title(title)
-        ax.set_xlabel("") # Ukryj etykietę osi X dla przejrzystości
-        ax.set_ylabel("") # Ukryj etykietę osi Y, jednostki są w tytule
+        # Tytuł metryki
+        metric_title = feature_titles.get(metric, metric)
+        ax.set_title(metric_title)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
 
         # Dodaj etykiety wartości na górze słupków
         for bar in ax.patches:
-            # Uzyskaj wartość dla paska
             value = bar.get_height()
-            # Dodaj tekst nad paskiem, wyrównany do środka i pogrubiony
-            ax.text(bar.get_x() + bar.get_width() / 2, # x-coordinate of the text
-                    value + (max(metric_data['Value']) * 0.01), # y-coordinate of the text
-                    f"{value:.1f}", # formatted value string
-                    ha='center', # horizontal alignment
-                    fontweight="bold") # font weight
+            ax.text(bar.get_x() + bar.get_width() / 2,
+                    value + (max(metric_data['Value']) * 0.01),
+                    f"{value:.1f}",
+                    ha='center',
+                    fontweight="bold")
 
-        # Opcjonalnie: dostosuj zakres osi Y dla lepszej prezentacji danych (np. dla tętna)
-        if metric == 'Average Heart Rate [bpm]':
-             ax.set_ylim(0, 160) # Na przykład dla tętna
-        elif metric == 'Average Speed [km/h]':
-            ax.set_ylim(0, 35)
-        elif metric == 'Elevation Gain [m]':
-            ax.set_ylim(0, 1200)
+        # Dostosuj zakresy osi Y
+        y_min = max(metric_data['Value'].min() * 0.8, 0)
+        y_max = metric_data['Value'].max() * 1.15
+        ax.set_ylim(y_min, y_max)
 
     # Tytuł całej figury (u góry)
     fig.suptitle("Fizjologiczny Profil Skrajnych Zawodników (Wartości Rzeczywiste)", fontsize=16)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95]) # Dostosuj layout dla lepszej prezentacji, pozostawiając miejsce na suptitle
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(output_path)
+    plt.close()
+    return output_path
+
+
+def plot_top_features_per_model(top_features_dict: dict[str, list], output_path: Path | None = None) -> Path:
+    """
+    Pokazuje TOP 3 features dla każdego modelu i ich korelacje.
+    
+    Argumenty:
+        top_features_dict: {model_name -> [(feature_name, abs_correlation), ...]}
+        output_path: Ścieżka do pliku wyjściowego
+    
+    Zwraca:
+        Path: Ścieżka do zapisu pliku
+    """
+    if output_path is None:
+        output_path = PLOTS_DIR / "top_features_per_model.png"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Mapowanie nazw features na czytalne nazwy
+    feature_labels = {
+        "pace_min_km": "Pace [min/km]",
+        "average_hr": "Average HR [bpm]",
+        "elevation_gain": "Elevation Gain [m]",
+        "total_distance": "Total Distance [km]",
+        "final_cadence": "Final Cadence [spm]",
+        "aerobic_decoupling": "Aerobic Decoupling [%]",
+        "age": "Age [years]",
+        "is_male": "Sex (M=1, F=0)",
+        "athlete_weight": "Weight [kg]",
+    }
+
+    models = list(top_features_dict.keys())
+    num_models = len(models)
+    
+    fig, axs = plt.subplots(nrows=1, ncols=num_models, figsize=(20, 5), sharey=True)
+    if num_models == 1:
+        axs = [axs]
+
+    for idx, model_name in enumerate(models):
+        ax = axs[idx]
+        features = top_features_dict[model_name]
+        
+        feature_names = [feature_labels.get(f[0], f[0]) for f in features]
+        correlations = [0.0 if pd.isna(f[1]) else float(f[1]) for f in features]
+        
+        # Barplot
+        bars = ax.barh(feature_names, correlations, color="steelblue")
+        
+        # Etykiety wartości
+        for i, (bar, corr) in enumerate(zip(bars, correlations)):
+            ax.text(corr + 0.01, i, f"{corr:.4f}", va="center", fontweight="bold")
+        
+        ax.set_xlabel("Combined Impact Score")
+        ax.set_title(model_name)
+        max_corr = max(correlations) if correlations else 0.0
+        ax.set_xlim(0, (max_corr * 1.2) if max_corr > 0 else 1.0)
+
+    fig.suptitle("TOP 3 Features per Model (by Combined Impact)", fontsize=14)
+    plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
     return output_path
