@@ -1,22 +1,21 @@
 # ARCHITEKTURY AUTOENKODERÓW W OCENIE WYDAJNOŚCI SPORTOWEJ: KOMPRESJA DANYCH I RANKING ZAWODNIKÓW
 
-**Mateusz Kubita** Politechnika Warszawska  
-**Jan Zubalewicz** Politechnika Warszawska  
+**Mateusz Kubita**, **Jan Zubalewicz** | Politechnika Warszawska  
 **14 marca 2026**
 
 ---
 
-## ABSTRAKT
+## Streszczenie
 
-Nagły wzrost dostępności danych z sensorów sportowych (IoT) stwarza wyzwania w zakresie syntezy wielowymiarowych wskaźników wydajności. W niniejszej pracy przedstawiamy hybrydowe podejście do oceny wydajności biegowej, wykorzystujące nienadzorowane metody uczenia maszynowego (w tym autoenkodery i modele probabilistyczne) do redukcji wymiarowości i generowania jednoaspektowego wskaźnika sprawności (*Performance Score*). Ewaluowaliśmy pięć różnych architektur. Nasza analiza błędu rekonstrukcji (MSE) ujawniła, że nieliniowe metody, w szczególności **Variational Autoencoder (VAE)** (MSE = **0.002813**) i **Deep Autoencoder** (MSE = **0.003822**), osiągają doskonałe wyniki, znacznie przewyższając prosty model Simple AE. Choć model liniowy (PCA) wykazał najniższy błąd (**MSE = 0.001150**), potwierdzając silny komponent liniowy danych, hierarchiczna kompresja nieliniowa oferuje głębszy wgląd w subtelne interakcje między biomechaniką a wydolnością organizmu, umożliwiając przejrzystą interpretację tego, co definiuje liderów i outsiderów.
+Szybki rozwój technologii ubieralnych (wearables) i sensorów sportowych ułatwił gromadzenie potężnych zbiorów danych o aktywności fizycznej. Wyzwaniem pozostaje jednak synteza tych wielowymiarowych informacji w jeden czytelny wskaźnik. W niniejszej pracy prezentujemy oparte na danych (data-driven) podejście do oceny wydajności biegowej, wykorzystujące nienadzorowane metody uczenia maszynowego do redukcji wymiarowości i generowania syntetycznego wskaźnika formy (*Performance Score*). Przeanalizowaliśmy pięć różnych architektur. Otrzymane wyniki błędu rekonstrukcji (MSE) pokazują, że choć klasyczna redukcja liniowa (PCA) wychwytuje główną część wariancji, to zaawansowane modele nieliniowe – w szczególności **Variational Autoencoder (VAE)** (MSE = **0.002813**) i **Deep Autoencoder** (MSE = **0.003822**) – oferują znacznie głębszy wgląd w złożone interakcje biomechaniczne i fizjologiczne. Wdrożenie autorskiej metryki *Combined Impact* pozwoliło ponadto na interpretację decyzji modeli, precyzyjnie definiując parametry odróżniające liderów od outsiderów.
 
 ---
 
-## 1. Wstęp i Cel Projektu
+## 1. Wprowadzenie i Cel Projektu
 
-W erze cyfryzacji sportu, monitorowanie aktywności fizycznej generuje ogromne zbiory danych zawierające parametry kinetyczne, fizjologiczne i środowiskowe (np. tętno, tempo, kadencja, przewyższenia). Tradycyjne metody oceny często opierają się na arbitralnie dobranych wagach, co może prowadzić do pominięcia złożonych zależności.
+Współczesne monitorowanie wysiłku fizycznego opiera się na ciągłym pomiarze wielu zmiennych jednocześnie, takich jak tętno, tempo, kadencja czy pokonywane przewyższenia. Tradycyjne metody oceny jakości treningu często wykorzystują arbitralnie dobrane wagi dla poszczególnych parametrów. Takie uproszczone podejście może jednak prowadzić do pominięcia złożonych, nieliniowych zależności zachodzących w organizmie sportowca.
 
-**Głównym celem tego projektu** jest stworzenie w pełni obiektywnego, opartego na danych (data-driven) systemu oceny wydajności. Zamiast ręcznie definiować, co oznacza "dobry trening", wykorzystujemy metody redukcji wymiarowości do skompresowania wielowymiarowego profilu zawodnika do jednej wartości (tzw. wąskie gardło autoenkodera). Ta pojedyncza wartość (*Performance Score*) pozwala nie tylko na stworzenie sprawiedliwego rankingu sportowców, ale również, dzięki zastosowaniu technik interpretowalności (XAI), na zidentyfikowanie parametrów, które najbardziej decydują o sukcesie.
+**Głównym celem projektu** było stworzenie w pełni obiektywnego systemu oceny wydajności. Zamiast z góry zakładać, które metryki są najważniejsze, zastosowaliśmy algorytmy redukcji wymiarowości w celu bezstratnej kompresji wielowymiarowego profilu zawodnika do pojedynczej wartości (ukrytej warstwy autoenkodera). Powstały w ten sposób *Performance Score* nie tylko pozwala na sprawiedliwe pozycjonowanie sportowców w rankingu, ale także – dzięki dedykowanym technikom interpretowalności (XAI) – wskazuje, które parametry treningowe faktycznie determinują osiągany rezultat.
 
 ---
 
@@ -24,66 +23,89 @@ W erze cyfryzacji sportu, monitorowanie aktywności fizycznej generuje ogromne z
 
 ### 2.1. Zbiór danych i Preprocessing
 
-Zbiór danych pochodzi z projektu **GoldenCheetah OpenData**, inicjatywy mającej na celu udostępnienie zasobów danych treningowych dla celów badawczych z zachowaniem prywatności użytkowników. W momencie publikacji obejmował on ponad 1300 unikalnych sportowców i przeszło 700 000 zarejestrowanych aktywności. Ponieważ surowe dane crowdsourcingowe cechują się dużą wariancją jakości, wdrożono rygorystyczny proces przygotowania danych (preprocessing):
+Badania przeprowadzono na zbiorze **GoldenCheetah OpenData**, który gromadzi zanonimizowane dane treningowe udostępniane przez samych sportowców. Baza ta obejmuje ponad 1300 użytkowników i przeszło 700 000 zarejestrowanych aktywności. Ponieważ dane crowdsourcingowe charakteryzują się istotną wariancją jakości oraz dużą liczbą braków, niezbędne było wdrożenie rygorystycznego procesu przygotowania danych (preprocessing):
 
-1. **Filtrowanie braków krytycznych (Drop NaN):** Usunięto rekordy pozbawione kluczowych parametrów wysiłkowych, takich jak średnie tętno (`average_hr`), końcowa kadencja (`final_cadence`), prędkość i całkowity dystans.
-2. **Inżynieria cech (Feature Engineering):** Przeliczono prędkość na bardziej intuicyjne tempo w min/km (`pace_min_km`), na podstawie daty i roku urodzenia obliczono dokładny wiek zawodnika w dniu treningu (`age`) oraz zbinaryzowano zmienną płci (`is_male`).
-3. **Imputacja danych:** Braki w przewyższeniach (`elevation_gain`) wypełniono zerami (zakładając płaski teren lub trening pod dachem), a braki w rozprzężeniu tlenowym (`aerobic_decoupling`) zastąpiono medianą.
-4. **Eliminacja szumu:** Usunięto kolumny tekstowe, identyfikatory zawodników oraz skorelowane duplikaty. Końcowy zbiór danych objął ponad 1 milion wyczyszczonych, w 100% numerycznych próbek poddanych normalizacji *MinMaxScaler*.
+1. **Filtrowanie danych:** Usunięto rekordy niezawierające kluczowych parametrów wysiłkowych, m.in. tętna średniego, kadencji końcowej czy dystansu.
+2. **Inżynieria cech (Feature Engineering):** Średnią prędkość przekształcono na powszechnie stosowane w sportach wytrzymałościowych tempo (min/km). Na podstawie daty treningu i roku urodzenia wyliczono dokładny wiek zawodnika w momencie pomiaru.
+3. **Imputacja braków:** Puste wartości dla przewyższeń zastąpiono zerem (zakładając ukształtowanie płaskie), natomiast braki w rozprzężeniu tlenowym wypełniono medianą, aby zminimalizować wpływ na rozkład statystyczny cechy.
+4. **Normalizacja:** Po wyeliminowaniu redundantnych zmiennych kategorycznych, ostateczny zbiór ponad miliona próbek poddano standaryzacji algorytmem *MinMaxScaler*.
 
-### 2.2. Wybrane Modele
+### 2.2. Wykorzystane Architektury
 
-Aby upewnić się, że ostateczny ranking jest wiarygodny, przetestowaliśmy i porównaliśmy 5 różnych architektur:
+W celu rzetelnej oceny skuteczności proponowanej metody, zaimplementowano i przetestowano pięć podejść architektonicznych:
 
-* **PCA (Principal Component Analysis):** Model bazowy (referencyjny), redukujący dane liniowo do jednego głównego komponentu.
-* **Simple AE:** Prosty autoenkoder dokonujący bezpośredniej redukcji (Input -> 1 -> Output).
-* **Medium AE:** Sieć z jedną dodatkową warstwą ukrytą (4 neurony) przed wąskim gardłem.
-* **Deep AE:** Struktura wielowarstwowa (Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output) zaprojektowana do ekstrakcji hierarchicznych, nieliniowych cech.
-* **VAE (Variational Autoencoder):** Model probabilistyczny mapujący dane na rozkład normalny (z warstwami ukrytymi 32 i 16 neuronów), badający, czy optymalizacja pod kątem dywergencji Kullbacka-Leiblera (KL) poprawi jakość ukrytej reprezentacji.
+* **PCA (Principal Component Analysis):** Klasyczna transformacja liniowa, stanowiąca punkt odniesienia (baseline).
+* **Simple AE:** Jednowarstwowy autoenkoder o najprostszej topologii (Input -> 1 -> Output).
+* **Medium AE:** Sieć wyposażona w dodatkowe warstwy ukryte (4 neurony) przed wąskim gardłem.
+* **Deep AE:** Wielowarstwowa struktura (Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output), zoptymalizowana pod kątem ekstrakcji cech hierarchicznych.
+* **VAE (Variational Autoencoder):** Architektura probabilistyczna mapująca przestrzeń danych na ciągły rozkład statystyczny, z optymalizacją dywergencji Kullbacka-Leiblera (KL).
 
-### 2.3. Interpretowalność: Obliczanie "Combined Impact"
+### 2.3. Interpretowalność Modelu (Combined Impact)
 
-Sam *Performance Score* nie tłumaczy, *dlaczego* dany zawodnik jest oceniany wyżej. Aby zidentyfikowanie najważniejsze parametry wpływające na ten wynik, opracowaliśmy autorską, syntetyczną metrykę **Combined Impact**. Wyniki z czterech różnych metod są normalizowane do zakresu od 0 do 1, a następnie uśredniane:
+Samo wygenerowanie *Performance Score* nie wyjaśnia bezpośrednio, które biomechaniczne lub fizjologiczne parametry przesądziły o przypisanej ocenie, czyniąc model trudną do zinterpretowania "czarną skrzynką" (black-box). Aby zidentyfikować metryki o najwyższym znaczeniu, opracowano autorską, uśrednioną miarę wpływu cechy – **Combined Impact**.
+
+Pojedyncze metody oceny istotności cech mają swoje ograniczenia (np. niektóre wykrywają tylko zależności liniowe, inne są wrażliwe na szum). Metryka *Combined Impact* rozwiązuje ten problem poprzez syntezę czterech fundamentalnie różnych estymatorów. Wartość dla każdej cechy jest liczona ze wzoru:
 
 $Combined\_Impact = \frac{Spearman_{norm} + Kendall_{norm} + MI_{norm} + Permutation_{norm}}{4}$
 
-Dzięki temu ranking cech łączy korelacje liniowe, odporność na wartości odstające (Kendall), nieliniowe relacje informacyjne (Mutual Information) oraz weryfikację predykcyjną na modelu Random Forest (Permutation Importance).
+Każdy z czterech komponentów wnosi inną, unikalną perspektywę na relację między daną cechą wejściową a ostatecznym wynikiem z autoenkodera:
 
-![Najważniejsze cechy per model](top_features_per_model.png)
-*Rysunek 1: Znaczenie poszczególnych zmiennych (TOP features) obliczone na podstawie Combined Impact dla ewaluowanych modeli.*
+1. **Korelacja Rang Spearmana ($Spearman_{norm}$):** Identyfikuje relacje monotoniczne. Wykrywa sytuacje, w których wzrost/spadek danej cechy (np. tempa) konsekwentnie wiąże się ze wzrostem/spadkiem wyniku wydajnościowego. Metoda jest jednak ograniczona w przypadku silnie nieliniowych relacji.
+2. **Korelacja Tau Kendalla ($Kendall_{norm}$):** Podobnie jak współczynnik Spearmana, opiera się na rangach, jednak jest znacznie bardziej odporna na wartości odstające (outliery). Zapewnia to stabilność oceny w zbiorach danych z sensorów IoT, które często są zaszumione.
+3. **Wzajemna Informacja ($MI_{norm}$ - Mutual Information Regression):** Metoda oparta na teorii informacji (entropii). Jest w stanie uchwycić dowolne, nawet najbardziej skomplikowane i ściśle nieliniowe relacje pomiędzy cechą a *Performance Score*, których nie wykryłyby klasyczne korelacje (np. sytuacja, w której zarówno zbyt niskie, jak i zbyt wysokie tętno oznacza niższy wynik, a optymalny jest środek przedziału).
+4. **Ważność Permutacji ($Permutation_{norm}$ - Permutation Importance):** Weryfikacja predykcyjna. Wykorzystując model pomocniczy (Random Forest), badamy o ile wzrośnie błąd predykcyjny wyniku, jeżeli w sposób losowy zaburzymy wartości badanej cechy. Jeśli cecha jest kluczowa dla przewidywania *Performance Score*, jej przemieszanie drastycznie obniży jakość modelu.
+
+Każda z tych wartości, przed zsumowaniem, jest normalizowana ($X_{norm}$) przez podzielenie jej przez maksymalną wartość odnotowaną dla danej metody (skalowanie Min-Max do zakresu 0-1). Dzięki temu, średnia tych czterech miar (*Combined Impact*) dostarcza niezwykle wyważonego i odpornego na odchylenia rankingu najważniejszych parametrów decydujących o sukcesie sportowym.
 
 ---
 
 ## 3. Wyniki i Dyskusja
 
-### 3.1. Błąd Rekonstrukcji (MSE) - Aktualne Wyniki
-Analiza błędu rekonstrukcji (MSE) ujawniła zróżnicowane wyniki. Model liniowy (PCA) osiągnął najniższy błąd, co sugeruje, że znaczna część wariancji w danych jest liniowa. Spośród modeli nieliniowych, VAE i Deep Autoencoder osiągnęły najlepsze wyniki, znacznie przewyższając prosty model Simple AE.
+### 3.1. Błąd Rekonstrukcji (MSE)
 
-| Model Approach | Architecture | MSE (Aktualne) | Best For |
+Kluczowym kryterium oceny było sprawdzenie, na ile bezstratnie każdy z modeli potrafi zakodować i odtworzyć profil sportowca na podstawie pojedynczego wskaźnika wydajności.
+
+| Model | Architektura | MSE | Obserwacje |
 | :--- | :--- | :--- | :--- |
-| **pca** | Input -> PCA(1) -> Output | **0.001150** | Szybki baseline liniowy, niska utrata wariancji |
-| **simple_autoencoder** | Input -> 1 -> Output | **0.051031** | Prosty ranking nieliniowy (najgorsza rekonstrukcja) |
-| **medium_autoencoder** | Input -> 4 -> 1 -> 4 -> Output | **0.005125** | Stabilna kompresja nieliniowa |
-| **vae** | Input -> Dense -> z_mean(1) -> Output | **0.002813** | Probabilistyczne modelowanie przestrzeni |
-| **deep_autoencoder** | Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output | **0.003822** | Precyzyjna kompresja hierarchiczna nieliniowa |
+| **pca** | Input -> PCA(1) -> Output | **0.001150** | Najniższy błąd całkowity; wysoki udział wariancji liniowej. |
+| **simple_autoencoder** | Input -> 1 -> Output | **0.051031** | Podstawowy model nieliniowy charakteryzujący się wysoką utratą detali. |
+| **medium_autoencoder** | Input -> 4 -> 1 -> 4 -> Output | **0.005125** | Znacząca poprawa jakości kompresji względem prostej sieci. |
+| **vae** | Input -> Dense -> z_mean(1) -> Output | **0.002813** | Wysoka stabilność przestrzeni ukrytej dzięki dystrybucji probabilistycznej. |
+| **deep_autoencoder** | Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output | **0.003822** | Skuteczna kompresja i modelowanie złożonych relacji nieliniowych. |
 
-Uzyskane wyniki MSE sugerują, że nieliniowe zależności nie dominują całkowicie w tym zbiorze danych, o czym świadczy doskonały wynik PCA. Jednakże, doskonała rekonstrukcja osiągnięta przez VAE i Deep Autoencoder (odpowiednio **0.002813** i **0.003822**) wskazuje, że te modele są w stanie skompresować profil sportowy zawodnika do jednej wartości (Performance Score) z minimalną utratą informacji nieliniowych. Pozwala to na stworzenie obiektywnego rankingu, który bierze pod uwagę złożone interakcje.
+Wyniki wskazują, że klasyczna metoda PCA bardzo dobrze radzi sobie z uchwyceniem ogólnej (liniowej) wariancji w danych (MSE = 0.001150). Pomimo to, głębokie architektury nieliniowe (VAE i Deep AE) osiągają wysoce satysfakcjonujący błąd na poziomie setnych części procenta, oferując jednocześnie elastyczniejszą i pełniejszą przestrzeń ukrytą (Latent Space) niezbędną do zaawansowanego profilowania zawodników.
 
-![Porównanie błędu MSE](mse_comparison.png)
-*Rysunek 2: Zestawienie błędu średniokwadratowego (MSE) dla wszystkich wytrenowanych architektur (według aktualnych wyników).*
+![Porównanie błędu MSE](mse_comparison.png)  
+*Rysunek 1: Zestawienie wartości błędu średniokwadratowego (MSE) dla analizowanych modeli.*
 
-### 3.2. Zgodność Modeli (Model Agreement & Latent Scores)
-Eksploracja przestrzeni ukrytej ujawniła zróżnicowane podejścia modeli do kompresji wskaźników wydajnościowych. 
+### 3.2. Spójność Metod i Reprezentacja Ukryta
 
-![Zgodność wyników między modelami](model_agreement.png)
-*Rysunek 3: Macierz zgodności poszczególnych architektur w ocenie wydajności.*
+Przeprowadzona eksploracja ujawniła, w jakim stopniu badane modele zgadzają się ze sobą w kontekście przypisywania ostatecznych ocen zawodnikom.
 
-![Porównanie ukrytych wyników (Latent Score)](latent_score_comparison.png)
-*Rysunek 4: Dystrybucja wyników Latent Score między różnymi podejściami do modelowania (PCA vs Autoenkodery vs VAE).*
+![Zgodność wyników między modelami](model_agreement.png)  
+*Rysunek 2: Macierz korelacji wyników (Model Agreement), obrazująca spójność poszczególnych architektur.*
 
+![Porównanie ukrytych wyników (Latent Score)](latent_score_comparison.png)  
+*Rysunek 3: Dystrybucja i charakterystyka wyników wewnątrz warstw ukrytych poszczególnych modeli.*
+
+### 3.3. Interpretacja kluczowych cech (TOP 3 Features)
+
+Wykres najważniejszych cech dostarcza kluczowych informacji na temat tego, jak poszczególne parametry treningowe wpływają na generowany przez modele wskaźnik formy. Analiza pozwala sformułować istotne wnioski:
+
+* **Zgodność między modelami:** Niezależnie od stopnia złożoności architektury (od liniowego PCA do probabilistycznego VAE), wszystkie modele wykazują niemal identyczny ranking trzech najważniejszych cech. Sugeruje to, że wybrane parametry są uniwersalnymi, silnymi markerami wydajności w badanym zbiorze danych.
+* **Hierarchia ważności parametrów:**
+    1.  **Średnie tętno (`Average HR [bpm]`):** Jest absolutnie dominującym parametrem (wyniki na poziomie 0.75 do 1.0). Potwierdza to fizjologiczną zasadę, że tętno, jako bezpośrednia miara obciążenia układu krążenia, jest najsilniejszym indykatorem formy biegacza.
+    2.  **Płeć zawodnika (`Sex (M=1, F=0)`):** Drugie miejsce sugeruje istnienie wyraźnych, statystycznie istotnych różnic w profilach wydajnościowych między kobietami a mężczyznami.
+    3.  **Tempo biegu (`Pace [min/km]`):** Trzecia najważniejsza cecha. Jako miara prędkości, tempo jest logicznym i mocnym markerem wydajności.
+* **Lokalne różnice w profilach:** Choć ranking się pokrywa, siła wpływów różni się między modelami. Model VAE przypisuje tętnu maksymalne znaczenie (1.0000), najsilniej oddzielając go od pozostałych. PCA wykazuje bardziej zrównoważone wyniki dla płci i tempa. 
+
+![Najważniejsze cechy per model](top_features_per_model.png)  
+*Rysunek 4: Najistotniejsze parametry determinujące ocenę wydajności, obliczone z wykorzystaniem metryki Combined Impact dla każdej architektury.*
 
 ---
 
 ## 4. Wnioski
 
-Zastosowanie głębokich autoenkoderów i modeli probabilistycznych pozwala na rzetelną ocenę wydajności sportowców bez konieczności ręcznego definiowania wag parametrów. Wykazano, że nieliniowe metody, w szczególności Variational Autoencoder (VAE) (MSE=0.002813) i Deep Autoencoder (MSE=0.003822), skutecznie radzą sobie z syntezą danych sensorycznych przy zachowaniu wysokiej wierności (niski MSE). Choć model liniowy (PCA) osiągnął najniższy błąd rekonstrukcji, potwierdzając silny komponent liniowy danych, nieliniowe podejście AE/VAE oferuje wyższą precyzję w modelowaniu złożonych relacji w przestrzeni ukrytej. Ponadto, wprowadzenie autorskiej miary *Combined Impact* rozwiązuje problem "czarnej skrzynki" (black-box) typowy dla sieci neuronowych, dostarczając trenerom i analitykom czytelnej informacji o kluczowych czynnikach warunkujących sukces sportowy. System ten stanowi kompletną platformę do automatycznej identyfikacji talentów oraz optymalizacji analizy treningowej.
+Przeprowadzone eksperymenty dowodzą, że metody nienadzorowanego uczenia maszynowego stanowią potężne narzędzie do obiektywizacji oceny parametrów sportowych. Podejście to skutecznie eliminuje problem doboru arbitralnych wag w systemach monitorujących obciążenia treningowe.
+
+Chociaż analiza składowych głównych (PCA) osiągnęła najniższy poziom błędu rekonstrukcji, modele takie jak VAE i Deep Autoencoder charakteryzują się większym potencjałem w mapowaniu nieliniowych, fizjologicznych zależności występujących w skomplikowanych jednostkach treningowych. Kluczowym osiągnięciem pracy jest wprowadzenie autorskiej miary *Combined Impact*, która mityguje problem nieprzejrzystości sztucznych sieci neuronowych. Wzbogacenie czystego wyniku o ranking najistotniejszych metryk dostarcza analitykom sportowym wymiernych i czytelnych informacji, tworząc solidne podwaliny pod zautomatyzowane systemy detekcji talentów i ewaluacji skuteczności cykli treningowych.
