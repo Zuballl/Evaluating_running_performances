@@ -1,47 +1,87 @@
 # ARCHITEKTURY AUTOENKODERÓW W OCENIE WYDAJNOŚCI SPORTOWEJ: KOMPRESJA DANYCH I RANKING ZAWODNIKÓW
 
-**Mateusz Kubita**   
-Politechnika Warszawska  
-
-**Jan Zubalewicz**  
-Politechnika Warszawska  
-
-
-**5 marca 2026**
+**Mateusz Kubita** Politechnika Warszawska  
+**Jan Zubalewicz** Politechnika Warszawska  
+**14 marca 2026**
 
 ---
 
-### ABSTRAKT
-Nagły wzrost dostępności danych z sensorów sportowych (IoT) stwarza wyzwania w zakresie syntezy wielowymiarowych wskaźników wydajności. W niniejszej pracy przedstawiamy hybrydowe podejście do oceny wydajności biegowej, wykorzystujące autoenkodery (AE) do redukcji wymiarowości i generowania jednoaspektowego wskaźnika sprawności (*Performance Score*). Ewaluowaliśmy trzy architektury: liniową (Simple AE), średnio-głęboką (Medium AE) oraz głęboką (Deep AE), a także techniki probabilistyczne (VAE) i nieliniowe mapowanie (t-SNE). Nasz najlepszy model — **Medium Autoencoder** — osiągnął najniższy błąd rekonstrukcji (**MSE = 0.009906**), skutecznie kompresując 69 parametrów treningowych do pojedynczej zmiennej ukrytej. Walidacja empiryczna wykazała silną korelację między wygenerowanym wskaźnikiem a fizjologicznymi parametrami sukcesu, takimi jak moc średnia i prędkość, przy jednoczesnym uwzględnieniu ekonomii wysiłku (HR). Wyniki sugerują, że nieliniowe modele kompresji oferują bardziej precyzyjne odzwierciedlenie potencjału sportowego niż tradycyjne średnie ważone.
+## ABSTRAKT
+
+Nagły wzrost dostępności danych z sensorów sportowych (IoT) stwarza wyzwania w zakresie syntezy wielowymiarowych wskaźników wydajności. W niniejszej pracy przedstawiamy hybrydowe podejście do oceny wydajności biegowej, wykorzystujące nienadzorowane metody uczenia maszynowego (w tym autoenkodery) do redukcji wymiarowości i generowania jednoaspektowego wskaźnika sprawności (*Performance Score*). Ewaluowaliśmy pięć różnych architektur. Nasz najlepszy model — **Deep Autoencoder** — osiągnął wyjątkowo niski błąd rekonstrukcji (**MSE = 0.000037**), co świadczy o niemal bezstratnej kompresji kluczowych parametrów treningowych do pojedynczej zmiennej ukrytej. Wyniki potwierdzają, że zwiększenie głębokości sieci pozwala na wychwycenie subtelnych, nieliniowych korelacji między biomechaniką a wydolnością organizmu, umożliwiając przejrzystą interpretację tego, co definiuje liderów i outsiderów.
 
 ---
 
-### 1. Wstęp
-W erze cyfryzacji sportu, monitorowanie aktywności fizycznej generuje ogromne zbiory danych zawierające parametry kinetyczne, fizjologiczne i środowiskowe (Berduygina et al., 2019). Kluczowym wyzwaniem dla analityków i trenerów pozostaje integracja tych rozproszonych metryk w obiektywny wskaźnik wydajności. Tradycyjne metody często opierają się na arbitralnie dobranych wagach dla poszczególnych cech, co może prowadzić do pominięcia złożonych, nieliniowych zależności między m.in. mocą krytyczną, tętnem a kadencją.
+## 1. Wstęp i Cel Projektu
 
-Clickbaitowe lub uproszczone podejście do analizy danych sportowych degraduje jakość informacji i może prowadzić do błędnych decyzji treningowych. W niniejszej pracy eksplorujemy zastosowanie nienadzorowanego uczenia głębokiego do automatycznej ekstrakcji cech wydajnościowych, umożliwiając transparentną i dobrze skalibrowaną predykcję potencjału zawodnika.
+W erze cyfryzacji sportu, monitorowanie aktywności fizycznej generuje ogromne zbiory danych zawierające parametry kinetyczne, fizjologiczne i środowiskowe (np. tętno, tempo, kadencja, przewyższenia). Tradycyjne metody oceny często opierają się na arbitralnie dobranych wagach, co może prowadzić do pominięcia złożonych zależności.
 
-### 2. Metodologia
-Badania przeprowadzono na zbiorze danych obejmującym parametry aktywności sportowych zintegrowane z danymi o sportowcach. Proces badawczy składał się z następujących etapów:
+**Głównym celem tego projektu** jest stworzenie w pełni obiektywnego, opartego na danych (data-driven) systemu oceny wydajności. Zamiast ręcznie definiować, co oznacza "dobry trening", wykorzystujemy metody redukcji wymiarowości do skompresowania wielowymiarowego profilu zawodnika do jednej wartości (tzw. wąskie gardło autoenkodera). Ta pojedyncza wartość (*Performance Score*) pozwala nie tylko na stworzenie sprawiedliwego rankingu sportowców, ale również, dzięki zastosowaniu technik interpretowalności (XAI), na zidentyfikowanie parametrów, które najbardziej decydują o sukcesie.
 
-1.  **Preprocessing:** Wykorzystano rygorystyczny potok czyszczenia danych, obejmujący usuwanie nieskończoności, imputację brakujących wartości medianą oraz usuwanie kolumn o zerowej wariancji. Zastosowano *MinMaxScaler* do normalizacji cech w zakresie [0, 1].
-2.  **Architektury Modeli:**
-    *   **Simple AE:** Mapowanie bezpośrednie do wymiaru latentnego.
-    *   **Medium AE:** Struktura z warstwą ukrytą o rozmiarze 16 neuronów.
-    *   **Deep AE:** Architektura wielowarstwowa (32-16-8) dla uchwycenia hierarchicznych zależności.
-3.  **Metryka sukcesu:** Głównym kryterium oceny był błąd średniokwadratowy (*Mean Squared Error*, MSE) rekonstrukcji danych wejściowych z jednowymiarowej przestrzeni ukrytej.
+---
 
-### 3. Wyniki i Dyskusja
-Analiza błędów rekonstrukcji wykazała, że architektura Medium AE oferuje optymalny balans (MSE = 0.009906). Model prosty (Simple AE) nie był w stanie odwzorować nieliniowości danych, natomiast model głęboki (Deep AE) nie przyniósł znaczącej poprawy, co wskazuje na osiągnięcie "płaskowyżu" informacyjnego.
+## 2. Metodologia
 
-| Model | Architektura (Warstwy) | MSE | Główne zastosowanie |
+### 2.1. Zbiór danych i Preprocessing
+
+Zbiór danych pochodzi z projektu **GoldenCheetah OpenData**, inicjatywy mającej na celu udostępnienie zasobów danych treningowych dla celów badawczych z zachowaniem prywatności użytkowników[cite: 1]. W momencie publikacji obejmował on ponad 1300 unikalnych sportowców i przeszło 700 000 zarejestrowanych aktywności[cite: 1]. Ponieważ surowe dane crowdsourcingowe cechują się dużą wariancją jakości, wdrożono rygorystyczny proces przygotowania danych (preprocessing):
+
+1. **Filtrowanie braków krytycznych (Drop NaN):** Usunięto rekordy pozbawione kluczowych parametrów wysiłkowych, takich jak średnie tętno (`average_hr`), końcowa kadencja (`final_cadence`), prędkość i całkowity dystans.
+2. **Inżynieria cech (Feature Engineering):** Przeliczono prędkość na bardziej intuicyjne tempo w min/km (`pace_min_km`), na podstawie daty i roku urodzenia obliczono dokładny wiek zawodnika w dniu treningu (`age`) oraz zbinaryzowano zmienną płci (`is_male`).
+3. **Imputacja danych:** Braki w przewyższeniach (`elevation_gain`) wypełniono zerami (zakładając płaski teren lub trening pod dachem), a braki w rozprzężeniu tlenowym (`aerobic_decoupling`) zastąpiono medianą.
+4. **Eliminacja szumu:** Usunięto kolumny tekstowe, identyfikatory zawodników oraz skorelowane duplikaty. Końcowy zbiór danych objął ponad 1 milion wyczyszczonych, w 100% numerycznych próbek poddanych normalizacji *MinMaxScaler*.
+
+### 2.2. Wybrane Modele
+
+Aby upewnić się, że ostateczny ranking jest wiarygodny, przetestowaliśmy i porównaliśmy 5 różnych architektur:
+
+* **PCA (Principal Component Analysis):** Model bazowy (referencyjny), redukujący dane liniowo do jednego głównego komponentu.
+* **Simple AE:** Prosty autoenkoder dokonujący bezpośredniej redukcji (Input -> 1 -> Output).
+* **Medium AE:** Sieć z jedną dodatkową warstwą ukrytą (4 neurony) przed wąskim gardłem.
+* **Deep AE:** Struktura wielowarstwowa (Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output) zaprojektowana do ekstrakcji hierarchicznych, nieliniowych cech.
+* **VAE (Variational Autoencoder):** Model probabilistyczny mapujący dane na rozkład normalny (z warstwami ukrytymi 32 i 16 neuronów), badający, czy optymalizacja pod kątem dywergencji Kullbacka-Leiblera (KL) poprawi jakość ukrytej reprezentacji.
+
+### 2.3. Interpretowalność: Obliczanie "Combined Impact"
+
+Sam *Performance Score* nie tłumaczy, *dlaczego* dany zawodnik jest oceniany wyżej. Aby zidentyfikować najważniejsze parametry wpływające na ten wynik, opracowaliśmy autorską, syntetyczną metrykę **Combined Impact**. Wyniki z czterech różnych metod są normalizowane do zakresu od 0 do 1, a następnie uśredniane:
+
+$Combined\_Impact = \frac{Spearman_{norm} + Kendall_{norm} + MI_{norm} + Permutation_{norm}}{4}$
+
+Dzięki temu ranking cech łączy korelacje liniowe, odporność na wartości odstające (Kendall), nieliniowe relacje informacyjne (Mutual Information) oraz weryfikację predykcyjną na modelu Random Forest (Permutation Importance).
+
+![Najważniejsze cechy per model](top_features_per_model.png)
+*Rysunek 1: Znaczenie poszczególnych zmiennych (TOP features) obliczone na podstawie Combined Impact dla ewaluowanych modeli.*
+
+---
+
+## 3. Wyniki i Dyskusja
+
+### 3.1. Błąd Rekonstrukcji (MSE)
+Analiza wykazała, że wraz ze wzrostem złożoności modelu, błąd rekonstrukcji ulegał drastycznemu zmniejszeniu. Modele nieliniowe (Deep AE) wyraźnie wyprzedziły rozwiązania liniowe (PCA).
+
+| Model Approach | Architecture | MSE | Best For |
 | :--- | :--- | :--- | :--- |
-| **Simple AE** | Input -> 1 -> Output | 0.012697 | Modelowanie liniowe |
-| **Medium AE** | Input -> 16 -> 1 -> 16 -> Output | **0.009906** | **Optymalny ranking** |
-| **Deep AE** | Input -> 32 -> 16 -> 8 -> 1 -> ... | 0.009911 | Złożone zależności |
+| **pca** | Input -> PCA(1) -> Output | 0.038120 | Szybki baseline liniowy |
+| **simple_autoencoder** | Input -> 1 -> Output | 0.004142 | Prosty ranking nieliniowy |
+| **medium_autoencoder** | Input -> 4 -> 1 -> 4 -> Output | 0.000584 | Stabilna kompresja |
+| **vae** | Input -> Dense -> z_mean(1) -> Output | 0.008450 | Modelowanie probabilistyczne przestrzeni |
+| **deep_autoencoder** | Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output | **0.000037** | **Precyzyjna ocena wydajności** |
 
-### 4. Wnioski
-Zastosowanie autoenkoderów pozwala na obiektywną ocenę wydajności sportowej bez konieczności ręcznego definiowania wag dla dziesiątek parametrów. Wykazano, że średnio-głębokie sieci neuronowe są najskuteczniejsze w syntezie danych sensorycznych, oferując stabilną podstawę do rankingu zawodników. Proponowany zestaw cech zwiększa interpretowalność wyników poprzez podkreślenie istotnych powiązań między mechaniką ruchu a kosztem biologicznym.
+![Porównanie błędu MSE](mse_comparison.png)
+*Rysunek 2: Zestawienie błędu średniokwadratowego (MSE) dla wszystkich wytrenowanych architektur.*
+
+### 3.2. Zgodność Modeli (Model Agreement & Latent Scores)
+Eksploracja przestrzeni ukrytej ujawniła zróżnicowane podejścia modeli do kompresji wskaźników wydajnościowych. 
+
+![Zgodność wyników między modelami](model_agreement.png)
+*Rysunek 3: Macierz zgodności poszczególnych architektur w ocenie wydajności.*
+
+![Porównanie ukrytych wyników (Latent Score)](latent_score_comparison.png)
+*Rysunek 4: Dystrybucja wyników Latent Score między różnymi podejściami do modelowania (PCA vs Autoenkodery vs VAE).*
+
 
 ---
-*Kod źródłowy oraz wyuczone modele zostały udostępnione w celu wsparcia replikowalności badań.*
+
+## 4. Wnioski
+
+Zastosowanie głębokich autoenkoderów pozwala na rzetelną ocenę wydajności sportowej bez konieczności ręcznego definiowania wag parametrów. Wykazano, że model głęboki (Deep AE) bezkonkurencyjnie radzi sobie z syntezą danych sensorycznych z ekstremalnie niskim błędem rekonstrukcji. Ponadto, wprowadzenie autorskiej miary *Combined Impact* rozwiązuje problem "czarnej skrzynki" (black-box) typowy dla sieci neuronowych, dostarczając trenerom i analitykom czytelnej informacji o kluczowych czynnikach warunkujących sukces sportowy. System ten stanowi kompletną platformę do automatycznej identyfikacji talentów oraz optymalizacji analizy treningowej.
