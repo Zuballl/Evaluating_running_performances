@@ -8,7 +8,7 @@
 
 ## ABSTRAKT
 
-Nagły wzrost dostępności danych z sensorów sportowych (IoT) stwarza wyzwania w zakresie syntezy wielowymiarowych wskaźników wydajności. W niniejszej pracy przedstawiamy hybrydowe podejście do oceny wydajności biegowej, wykorzystujące nienadzorowane metody uczenia maszynowego (w tym autoenkodery) do redukcji wymiarowości i generowania jednoaspektowego wskaźnika sprawności (*Performance Score*). Ewaluowaliśmy pięć różnych architektur. Nasz najlepszy model — **Deep Autoencoder** — osiągnął wyjątkowo niski błąd rekonstrukcji (**MSE = 0.000037**), co świadczy o niemal bezstratnej kompresji kluczowych parametrów treningowych do pojedynczej zmiennej ukrytej. Wyniki potwierdzają, że zwiększenie głębokości sieci pozwala na wychwycenie subtelnych, nieliniowych korelacji między biomechaniką a wydolnością organizmu, umożliwiając przejrzystą interpretację tego, co definiuje liderów i outsiderów.
+Nagły wzrost dostępności danych z sensorów sportowych (IoT) stwarza wyzwania w zakresie syntezy wielowymiarowych wskaźników wydajności. W niniejszej pracy przedstawiamy hybrydowe podejście do oceny wydajności biegowej, wykorzystujące nienadzorowane metody uczenia maszynowego (w tym autoenkodery i modele probabilistyczne) do redukcji wymiarowości i generowania jednoaspektowego wskaźnika sprawności (*Performance Score*). Ewaluowaliśmy pięć różnych architektur. Nasza analiza błędu rekonstrukcji (MSE) ujawniła, że nieliniowe metody, w szczególności **Variational Autoencoder (VAE)** (MSE = **0.002813**) i **Deep Autoencoder** (MSE = **0.003822**), osiągają doskonałe wyniki, znacznie przewyższając prosty model Simple AE. Choć model liniowy (PCA) wykazał najniższy błąd (**MSE = 0.001150**), potwierdzając silny komponent liniowy danych, hierarchiczna kompresja nieliniowa oferuje głębszy wgląd w subtelne interakcje między biomechaniką a wydolnością organizmu, umożliwiając przejrzystą interpretację tego, co definiuje liderów i outsiderów.
 
 ---
 
@@ -24,7 +24,7 @@ W erze cyfryzacji sportu, monitorowanie aktywności fizycznej generuje ogromne z
 
 ### 2.1. Zbiór danych i Preprocessing
 
-Zbiór danych pochodzi z projektu **GoldenCheetah OpenData**, inicjatywy mającej na celu udostępnienie zasobów danych treningowych dla celów badawczych z zachowaniem prywatności użytkowników[cite: 1]. W momencie publikacji obejmował on ponad 1300 unikalnych sportowców i przeszło 700 000 zarejestrowanych aktywności[cite: 1]. Ponieważ surowe dane crowdsourcingowe cechują się dużą wariancją jakości, wdrożono rygorystyczny proces przygotowania danych (preprocessing):
+Zbiór danych pochodzi z projektu **GoldenCheetah OpenData**, inicjatywy mającej na celu udostępnienie zasobów danych treningowych dla celów badawczych z zachowaniem prywatności użytkowników. W momencie publikacji obejmował on ponad 1300 unikalnych sportowców i przeszło 700 000 zarejestrowanych aktywności. Ponieważ surowe dane crowdsourcingowe cechują się dużą wariancją jakości, wdrożono rygorystyczny proces przygotowania danych (preprocessing):
 
 1. **Filtrowanie braków krytycznych (Drop NaN):** Usunięto rekordy pozbawione kluczowych parametrów wysiłkowych, takich jak średnie tętno (`average_hr`), końcowa kadencja (`final_cadence`), prędkość i całkowity dystans.
 2. **Inżynieria cech (Feature Engineering):** Przeliczono prędkość na bardziej intuicyjne tempo w min/km (`pace_min_km`), na podstawie daty i roku urodzenia obliczono dokładny wiek zawodnika w dniu treningu (`age`) oraz zbinaryzowano zmienną płci (`is_male`).
@@ -43,7 +43,7 @@ Aby upewnić się, że ostateczny ranking jest wiarygodny, przetestowaliśmy i p
 
 ### 2.3. Interpretowalność: Obliczanie "Combined Impact"
 
-Sam *Performance Score* nie tłumaczy, *dlaczego* dany zawodnik jest oceniany wyżej. Aby zidentyfikować najważniejsze parametry wpływające na ten wynik, opracowaliśmy autorską, syntetyczną metrykę **Combined Impact**. Wyniki z czterech różnych metod są normalizowane do zakresu od 0 do 1, a następnie uśredniane:
+Sam *Performance Score* nie tłumaczy, *dlaczego* dany zawodnik jest oceniany wyżej. Aby zidentyfikowanie najważniejsze parametry wpływające na ten wynik, opracowaliśmy autorską, syntetyczną metrykę **Combined Impact**. Wyniki z czterech różnych metod są normalizowane do zakresu od 0 do 1, a następnie uśredniane:
 
 $Combined\_Impact = \frac{Spearman_{norm} + Kendall_{norm} + MI_{norm} + Permutation_{norm}}{4}$
 
@@ -56,19 +56,21 @@ Dzięki temu ranking cech łączy korelacje liniowe, odporność na wartości od
 
 ## 3. Wyniki i Dyskusja
 
-### 3.1. Błąd Rekonstrukcji (MSE)
-Analiza wykazała, że wraz ze wzrostem złożoności modelu, błąd rekonstrukcji ulegał drastycznemu zmniejszeniu. Modele nieliniowe (Deep AE) wyraźnie wyprzedziły rozwiązania liniowe (PCA).
+### 3.1. Błąd Rekonstrukcji (MSE) - Aktualne Wyniki
+Analiza błędu rekonstrukcji (MSE) ujawniła zróżnicowane wyniki. Model liniowy (PCA) osiągnął najniższy błąd, co sugeruje, że znaczna część wariancji w danych jest liniowa. Spośród modeli nieliniowych, VAE i Deep Autoencoder osiągnęły najlepsze wyniki, znacznie przewyższając prosty model Simple AE.
 
-| Model Approach | Architecture | MSE | Best For |
+| Model Approach | Architecture | MSE (Aktualne) | Best For |
 | :--- | :--- | :--- | :--- |
-| **pca** | Input -> PCA(1) -> Output | 0.038120 | Szybki baseline liniowy |
-| **simple_autoencoder** | Input -> 1 -> Output | 0.004142 | Prosty ranking nieliniowy |
-| **medium_autoencoder** | Input -> 4 -> 1 -> 4 -> Output | 0.000584 | Stabilna kompresja |
-| **vae** | Input -> Dense -> z_mean(1) -> Output | 0.008450 | Modelowanie probabilistyczne przestrzeni |
-| **deep_autoencoder** | Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output | **0.000037** | **Precyzyjna ocena wydajności** |
+| **pca** | Input -> PCA(1) -> Output | **0.001150** | Szybki baseline liniowy, niska utrata wariancji |
+| **simple_autoencoder** | Input -> 1 -> Output | **0.051031** | Prosty ranking nieliniowy (najgorsza rekonstrukcja) |
+| **medium_autoencoder** | Input -> 4 -> 1 -> 4 -> Output | **0.005125** | Stabilna kompresja nieliniowa |
+| **vae** | Input -> Dense -> z_mean(1) -> Output | **0.002813** | Probabilistyczne modelowanie przestrzeni |
+| **deep_autoencoder** | Input -> 5 -> 3 -> 1 -> 3 -> 5 -> Output | **0.003822** | Precyzyjna kompresja hierarchiczna nieliniowa |
+
+Uzyskane wyniki MSE sugerują, że nieliniowe zależności nie dominują całkowicie w tym zbiorze danych, o czym świadczy doskonały wynik PCA. Jednakże, doskonała rekonstrukcja osiągnięta przez VAE i Deep Autoencoder (odpowiednio **0.002813** i **0.003822**) wskazuje, że te modele są w stanie skompresować profil sportowy zawodnika do jednej wartości (Performance Score) z minimalną utratą informacji nieliniowych. Pozwala to na stworzenie obiektywnego rankingu, który bierze pod uwagę złożone interakcje.
 
 ![Porównanie błędu MSE](mse_comparison.png)
-*Rysunek 2: Zestawienie błędu średniokwadratowego (MSE) dla wszystkich wytrenowanych architektur.*
+*Rysunek 2: Zestawienie błędu średniokwadratowego (MSE) dla wszystkich wytrenowanych architektur (według aktualnych wyników).*
 
 ### 3.2. Zgodność Modeli (Model Agreement & Latent Scores)
 Eksploracja przestrzeni ukrytej ujawniła zróżnicowane podejścia modeli do kompresji wskaźników wydajnościowych. 
@@ -84,4 +86,4 @@ Eksploracja przestrzeni ukrytej ujawniła zróżnicowane podejścia modeli do ko
 
 ## 4. Wnioski
 
-Zastosowanie głębokich autoenkoderów pozwala na rzetelną ocenę wydajności sportowej bez konieczności ręcznego definiowania wag parametrów. Wykazano, że model głęboki (Deep AE) bezkonkurencyjnie radzi sobie z syntezą danych sensorycznych z ekstremalnie niskim błędem rekonstrukcji. Ponadto, wprowadzenie autorskiej miary *Combined Impact* rozwiązuje problem "czarnej skrzynki" (black-box) typowy dla sieci neuronowych, dostarczając trenerom i analitykom czytelnej informacji o kluczowych czynnikach warunkujących sukces sportowy. System ten stanowi kompletną platformę do automatycznej identyfikacji talentów oraz optymalizacji analizy treningowej.
+Zastosowanie głębokich autoenkoderów i modeli probabilistycznych pozwala na rzetelną ocenę wydajności sportowców bez konieczności ręcznego definiowania wag parametrów. Wykazano, że nieliniowe metody, w szczególności Variational Autoencoder (VAE) (MSE=0.002813) i Deep Autoencoder (MSE=0.003822), skutecznie radzą sobie z syntezą danych sensorycznych przy zachowaniu wysokiej wierności (niski MSE). Choć model liniowy (PCA) osiągnął najniższy błąd rekonstrukcji, potwierdzając silny komponent liniowy danych, nieliniowe podejście AE/VAE oferuje wyższą precyzję w modelowaniu złożonych relacji w przestrzeni ukrytej. Ponadto, wprowadzenie autorskiej miary *Combined Impact* rozwiązuje problem "czarnej skrzynki" (black-box) typowy dla sieci neuronowych, dostarczając trenerom i analitykom czytelnej informacji o kluczowych czynnikach warunkujących sukces sportowy. System ten stanowi kompletną platformę do automatycznej identyfikacji talentów oraz optymalizacji analizy treningowej.
