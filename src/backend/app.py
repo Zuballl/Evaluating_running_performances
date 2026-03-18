@@ -23,7 +23,6 @@ class PredictRequest(BaseModel):
     final_cadence: float = Field(..., ge=0)
     pace_min_km: float = Field(..., ge=0)
     age: int
-    is_male: int = Field(..., ge=0, le=1)
 
 
 class ContributionItem(BaseModel):
@@ -82,7 +81,6 @@ async def predict_fit(
     top_k: int = 5,
     preprocessing: str = "standard_clip",
     age: int | None = Form(None),
-    is_male: int | None = Form(None),
     athlete_weight: float | None = Form(None),
 ) -> PredictResponse:
     if not fit_file.filename:
@@ -102,7 +100,6 @@ async def predict_fit(
         "final_cadence": parsed.final_cadence,
         "pace_min_km": parsed.pace_min_km,
         "age": parsed.age if parsed.age is not None else age,
-        "is_male": parsed.is_male if parsed.is_male is not None else is_male,
     }
 
     missing = [k for k, v in features.items() if v is None]
@@ -133,7 +130,7 @@ def _predict_from_features(features: dict[str, Any], top_k: int, preprocessing: 
 
 
 def _raise_missing_fields_error(missing_fields: list[str]) -> None:
-    profile_fields = {"age", "is_male", "athlete_weight"}
+    profile_fields = {"age", "athlete_weight"}
     missing_profile = [field for field in missing_fields if field in profile_fields]
     missing_metrics = [field for field in missing_fields if field not in profile_fields]
 
@@ -153,6 +150,6 @@ def _raise_missing_fields_error(missing_fields: list[str]) -> None:
             "code": "missing_profile_fields",
             "message": "Provide missing profile fields before scoring.",
             "missing_fields": missing_profile,
-            "prompt": "Please provide age (and optionally gender/weight if missing).",
+            "prompt": "Please provide age and weight if missing.",
         },
     )

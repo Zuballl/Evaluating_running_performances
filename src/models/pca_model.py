@@ -14,9 +14,10 @@ class PCAResult:
     mse: float
     scores: np.ndarray
     explained_variance_ratio: float
+    scaler: MinMaxScaler | None = None
 
 
-def run_pca(df_train: pd.DataFrame, df_test: pd.DataFrame, df_all: pd.DataFrame) -> PCAResult:
+def run_pca(df_train: pd.DataFrame, df_test: pd.DataFrame, df_all: pd.DataFrame) -> tuple[PCAResult, MinMaxScaler]:
     scaler = MinMaxScaler()
     scaled_train = scaler.fit_transform(df_train)
     scaled_test = scaler.transform(df_test)
@@ -33,10 +34,12 @@ def run_pca(df_train: pd.DataFrame, df_test: pd.DataFrame, df_all: pd.DataFrame)
     # Scores for all data (for ranking)
     scores = pca.transform(scaled_all).flatten()
 
-    return PCAResult(
+    result = PCAResult(
         name="pca",
         architecture="Input -> PCA(1) -> Output",
         mse=mse,
         scores=scores,
         explained_variance_ratio=float(pca.explained_variance_ratio_[0]),
+        scaler=scaler,
     )
+    return result, scaler

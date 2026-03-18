@@ -141,7 +141,6 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, features_to_plot: list[
         'Final Cadence [spm]': 'Ostateczna Kadencja [spm]',
         'Aerobic Decoupling [%]': 'Aerobic Decoupling [%]',
         'Age [years]': 'Wiek [lata]',
-        'Sex (Male=1, Female=0)': 'Płeć (M=1, K=0)',
         'Athlete Weight [kg]': 'Waga Zawodnika [kg]',
     }
 
@@ -182,7 +181,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, features_to_plot: list[
 
 def plot_top_features_per_model(top_features_dict: dict[str, list], output_path: Path | None = None) -> Path:
     """
-    Pokazuje TOP 3 features dla każdego modelu i ich korelacje.
+    Pokazuje TOP 3 features dla każdego modelu z kolorami medalowymi (🥇🥈🥉).
     
     Argumenty:
         top_features_dict: {model_name -> [(feature_name, abs_correlation), ...]}
@@ -205,14 +204,18 @@ def plot_top_features_per_model(top_features_dict: dict[str, list], output_path:
         "final_cadence": "Final Cadence [spm]",
         "aerobic_decoupling": "Aerobic Decoupling [%]",
         "age": "Age [years]",
-        "is_male": "Sex (M=1, F=0)",
         "athlete_weight": "Weight [kg]",
     }
+    
+    # Medal colors: Gold, Silver, Bronze
+    medal_colors = ["#FFD700", "#C0C0C0", "#CD7F32"]
+    medal_labels = ["1st", "2nd", "3rd"]  # Text labels instead of emojis
 
     models = list(top_features_dict.keys())
     num_models = len(models)
     
-    fig, axs = plt.subplots(nrows=1, ncols=num_models, figsize=(20, 5), sharey=True)
+    # Each model has different top features, so do not share Y axis labels.
+    fig, axs = plt.subplots(nrows=1, ncols=num_models, figsize=(22, 6), sharey=False)
     if num_models == 1:
         axs = [axs]
 
@@ -220,23 +223,32 @@ def plot_top_features_per_model(top_features_dict: dict[str, list], output_path:
         ax = axs[idx]
         features = top_features_dict[model_name]
         
-        feature_names = [feature_labels.get(f[0], f[0]) for f in features]
-        correlations = [0.0 if pd.isna(f[1]) else float(f[1]) for f in features]
+        # Extract feature names and values with consistent ordering (position 0, 1, 2)
+        feature_data = [(feature_labels.get(f[0], f[0]), 0.0 if pd.isna(f[1]) else float(f[1])) for f in features]
+        feature_names = [item[0] for item in feature_data]
+        correlations = [item[1] for item in feature_data]
         
-        # Barplot
-        bars = ax.barh(feature_names, correlations, color="steelblue")
+        # Barplot with medal colors - reverse order so #1 is at top
+        y_pos = range(len(feature_names))
+        bars = ax.barh(y_pos, correlations, color=medal_colors, edgecolor="black", linewidth=1.5)
         
-        # Etykiety wartości
-        for i, (bar, corr) in enumerate(zip(bars, correlations)):
-            ax.text(corr + 0.01, i, f"{corr:.4f}", va="center", fontweight="bold")
+        # Set tick labels explicitly 
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(feature_names, fontweight="bold")
         
-        ax.set_xlabel("Combined Impact Score")
-        ax.set_title(model_name)
+        # Add medal symbols and values on bars
+        for i, (y, corr) in enumerate(zip(y_pos, correlations)):
+            medal = medal_labels[i]
+            ax.text(corr + 0.02, y, f"[{medal}] {corr:.4f}", va="center", fontweight="bold", fontsize=10)
+        
+        ax.set_xlabel("Combined Impact Score", fontweight="bold")
+        ax.set_title(model_name, fontweight="bold", fontsize=12)
         max_corr = max(correlations) if correlations else 0.0
-        ax.set_xlim(0, (max_corr * 1.2) if max_corr > 0 else 1.0)
+        ax.set_xlim(0, (max_corr * 1.35) if max_corr > 0 else 1.0)
+        ax.grid(axis="x", alpha=0.3, linestyle="--")
 
-    fig.suptitle("TOP 3 Features per Model (by Combined Impact)", fontsize=14)
+    fig.suptitle("TOP 3 Features per Model (Medal Ranking by Combined Impact)", fontsize=16, fontweight="bold", y=0.98)
     plt.tight_layout()
-    plt.savefig(output_path)
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
     return output_path

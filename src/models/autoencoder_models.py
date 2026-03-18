@@ -15,6 +15,7 @@ class AutoencoderResult:
     architecture: str
     mse: float
     scores: np.ndarray
+    scaler: MinMaxScaler | None = None
 
 
 class ConfigurableAutoencoder(nn.Module):
@@ -159,7 +160,7 @@ def run_autoencoder_comparison(
     ae_epochs: int = 20,
     ae_batch_size: int = 2048,
     ae_patience: int = 3,
-) -> tuple[list[AutoencoderResult], np.ndarray]:
+) -> tuple[list[AutoencoderResult], np.ndarray, MinMaxScaler]:
     print(f"Scaling data: train={df_train.shape}, test={df_test.shape}, all={df_all.shape}")
     scaler = MinMaxScaler()
     scaled_train = scaler.fit_transform(df_train)
@@ -184,9 +185,10 @@ def run_autoencoder_comparison(
             batch_size=ae_batch_size,
             patience=ae_patience,
         )
+        res.scaler = scaler
         results.append(res)
         
-    return results, scaled_all
+    return results, scaled_all, scaler
 
 if __name__ == "__main__":
     from sklearn.model_selection import train_test_split
@@ -196,7 +198,7 @@ if __name__ == "__main__":
     print(f'Running autoencoder comparison on {len(cleaned_df)} rows...')
 
     train_df, test_df = train_test_split(cleaned_df, test_size=0.2, random_state=42)
-    results, _ = run_autoencoder_comparison(train_df, test_df, cleaned_df)
+    results, _, scaler = run_autoencoder_comparison(train_df, test_df, cleaned_df)
     
     print("\n" + "="*30)
     print("FINAL RESULTS")

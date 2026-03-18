@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-const ALL_TRAINED_FEATURES_COUNT = 10;
+const ALL_TRAINED_FEATURES_COUNT = 8;
 const PREPROCESSING_MODE = 'standard_clip';
 
 const FIELD_LABELS = {
   age: 'Age',
-  is_male: 'Gender (1 = male, 0 = female)',
   athlete_weight: 'Weight [kg]',
 };
 
@@ -18,7 +17,6 @@ const FEATURE_DISPLAY = {
   final_cadence: 'Final Cadence [spm]',
   aerobic_decoupling: 'Aerobic Decoupling [%]',
   age: 'Age [years]',
-  is_male: 'Sex (Male=1, Female=0)',
   elevation_gain: 'Elevation Gain [m]',
 };
 
@@ -30,7 +28,6 @@ const FEATURE_HELP = {
   final_cadence: 'Average running cadence in steps per minute.',
   aerobic_decoupling: 'Change of speed-to-heart-rate efficiency over time.',
   age: 'Runner age in years.',
-  is_male: 'Binary sex indicator from the dataset (1 male, 0 female).',
   elevation_gain: 'Total ascent in meters.',
 };
 

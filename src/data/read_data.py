@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -30,22 +29,35 @@ def prepare_clean_data(
     df = pd.read_csv(raw_data_path)
     df.columns = df.columns.str.strip()
 
-
     df.dropna(subset=CRUCIAL_COLUMNS, inplace=True)
 
     df["pace_min_km"] = 60 / df["average_speed"]
 
-
     df["date"] = pd.to_datetime(df["date"])
     df["age"] = df["date"].dt.year - df["yob"]
-
-    df["is_male"] = np.where(df["gender"] == "M", 1, 0)
 
     df.drop(columns=COLUMNS_TO_DROP, inplace=True)
 
     df["elevation_gain"] = df["elevation_gain"].fillna(0)
     median_aerobic_decoupling = df["aerobic_decoupling"].median()
     df["aerobic_decoupling"] = df["aerobic_decoupling"].fillna(median_aerobic_decoupling)
+
+    # Remove physiologically implausible outliers
+    print(f"Before outlier removal: {len(df)} rows")
+    
+    # Thresholds for realistic running metrics:
+    # - pace_min_km: 2.0-15.0 (running pace)
+    # - average_hr: 40.0-220.0 (heart rate, medical bounds)
+    # - final_cadence: 60.0-180.0 (cadence in RPM)
+    # - aerobic_decoupling: -150 to 150 (can be negative = good aerobic control!)
+    df = df[
+        (df["pace_min_km"] >= 2.0) & (df["pace_min_km"] <= 15.0) &
+        (df["average_hr"] >= 40.0) & (df["average_hr"] <= 220.0) &
+        (df["final_cadence"] >= 60.0) & (df["final_cadence"] <= 180.0) &
+        (df["aerobic_decoupling"] >= -150.0) & (df["aerobic_decoupling"] <= 150.0)
+    ]
+    
+    print(f"After outlier removal: {len(df)} rows")
 
     processed_data_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(processed_data_path, index=False)
@@ -57,6 +69,8 @@ def load_clean_numeric_data(
     sample_size: int | None = 10000,
 ) -> pd.DataFrame:
     df = pd.read_csv(clean_data_path)
+    if "is_male" in df.columns:
+        df = df.drop(columns=["is_male"])
     df_numeric = df.select_dtypes(include=["number"]).copy()
     if sample_size is not None:
         df_numeric = df_numeric.head(sample_size)

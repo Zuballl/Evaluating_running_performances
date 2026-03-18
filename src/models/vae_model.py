@@ -15,6 +15,7 @@ class VAEResult:
     mse: float
     scores: np.ndarray
     kl_loss: float
+    scaler: MinMaxScaler | None = None
 
 
 class VAE(nn.Module):
@@ -152,4 +153,5 @@ def run_vae(
         mse=mse,
         scores=z_mean_all_np.flatten(),
         kl_loss=kl_loss,
+        scaler=scaler,
     )

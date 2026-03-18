@@ -25,10 +25,12 @@ def parse_args():
     parser.add_argument("--vae-patience", type=int, default=5, help="Early stopping patience for VAE.")
     return parser.parse_args()
 
-def get_extreme_athletes(df_numeric, scores):
+def get_extreme_athletes(df_numeric, scores, scaler=None):
     """
     Extracts top 3 and bottom 3 athletes based on scores.
     Returns both the extreme athletes DataFrame and the top 3 features by correlation.
+    
+    If scaler is provided, denormalizes the data back to original units for visualization.
     """
     # Dodajemy wyniki do kopii danych, aby móc je posortować
     df_with_scores = df_numeric.copy()
@@ -69,11 +71,14 @@ def get_extreme_athletes(df_numeric, scores):
         "final_cadence": "Final Cadence [spm]",
         "aerobic_decoupling": "Aerobic Decoupling [%]",
         "age": "Age [years]",
-        "is_male": "Sex (Male=1, Female=0)",
         "athlete_weight": "Athlete Weight [kg]",
     }
 
     renamed_extreme_df = extreme_df.rename(columns=column_mapping)
+    
+    # Note: df_numeric is already in original units (no denormalization needed)
+    # The scaler is used internally for model training, not for visualization
+    
     mapped_features = [column_mapping.get(feat, feat) for feat in top_3_feature_names]
     
     return renamed_extreme_df, mapped_features
@@ -107,7 +112,7 @@ def main():
     print(f"Train/test split: {len(df_train)} train rows, {len(df_test)} test rows")
 
     print("running autoencoder comparison...")
-    autoencoder_results, _ = run_autoencoder_comparison(
+    autoencoder_results, _, ae_scaler = run_autoencoder_comparison(
         df_train,
         df_test,
         df_numeric,
@@ -117,7 +122,7 @@ def main():
     )
     print("Autoencoder comparison complete.")
 
-    pca_result = run_pca(df_train, df_test, df_numeric)
+    pca_result, pca_scaler = run_pca(df_train, df_test, df_numeric)
     print(f"PCA complete. Scores shape: {pca_result.scores.shape}")
 
     vae_result = run_vae(
@@ -139,7 +144,7 @@ def main():
     
     # 2. Wybieramy skrajne przypadki na podstawie rzeczywistych danych
     print("Identyfikacja liderów i outsiderów...")
-    extreme_athletes_df, top_features = get_extreme_athletes(df_numeric, best_model_results.scores)
+    extreme_athletes_df, top_features = get_extreme_athletes(df_numeric, best_model_results.scores, scaler=ae_scaler)
     
     # 3. Generujemy profilowy wykres słupkowy
     from src.visualization.plots import plot_athlete_profiles

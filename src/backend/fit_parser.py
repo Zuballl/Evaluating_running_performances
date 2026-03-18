@@ -19,7 +19,6 @@ class ParsedFitMetrics:
     final_cadence: float | None = None
     pace_min_km: float | None = None
     age: int | None = None
-    is_male: int | None = None
 
 
 def parse_fit_metrics(content: bytes) -> ParsedFitMetrics:
@@ -34,19 +33,10 @@ def parse_fit_metrics(content: bytes) -> ParsedFitMetrics:
 
     athlete_weight = None
     age = None
-    is_male = None
 
     user_profile = _first_message(fit, "user_profile")
     if user_profile is not None:
         athlete_weight = _message_value(user_profile, "weight")
-
-        gender = _message_value(user_profile, "gender")
-        if isinstance(gender, str):
-            gender_lower = gender.lower()
-            if gender_lower.startswith("m"):
-                is_male = 1
-            elif gender_lower.startswith("f"):
-                is_male = 0
 
         birth_year = _message_value(user_profile, "birth_year")
         if isinstance(birth_year, (int, float)) and birth_year > 1900:
@@ -67,7 +57,6 @@ def parse_fit_metrics(content: bytes) -> ParsedFitMetrics:
         final_cadence=float(final_cadence) if final_cadence is not None else None,
         pace_min_km=pace_min_km,
         age=age,
-        is_male=is_male,
     )
 
 
