@@ -62,8 +62,8 @@ def plot_latent_score_comparison(comparison_df: pd.DataFrame, output_path: Path 
 
     plt.figure(figsize=(12, 6))
     ax = sns.barplot(data=plot_df, x="Model", y="Value", hue="Metric", palette="crest")
-    plt.title("Porównanie jakości latent score (combined impact)")
-    plt.ylabel("Combined feature impact")
+    plt.title("Porównanie jakości latent score (agregacja rang)")
+    plt.ylabel("Aggregated rank impact")
     plt.xlabel("Model")
     plt.axhline(0, color="black", linewidth=0.8)
 
@@ -130,7 +130,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, features_to_plot: list[
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Inicjalizacja figury matplotlib
-    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(20, 6), sharex=True)
+    fig, axs = plt.subplots(nrows=1, ncols=3, figsize=(22, 7), sharex=True)
 
     # Mapowanie feature names na bardziej czytalne nazwy (opcjonalnie)
     feature_titles = {
@@ -173,8 +173,7 @@ def plot_athlete_profiles(comparison_data: pd.DataFrame, features_to_plot: list[
     # Tytuł całej figury (u góry)
     fig.suptitle("Fizjologiczny Profil Skrajnych Zawodników (Wartości Rzeczywiste)", fontsize=16)
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(output_path)
+    plt.savefig(output_path, bbox_inches="tight")
     plt.close()
     return output_path
 
@@ -241,13 +240,242 @@ def plot_top_features_per_model(top_features_dict: dict[str, list], output_path:
             medal = medal_labels[i]
             ax.text(corr + 0.02, y, f"[{medal}] {corr:.4f}", va="center", fontweight="bold", fontsize=10)
         
-        ax.set_xlabel("Combined Impact Score", fontweight="bold")
+        ax.set_xlabel("Aggregated Rank Score", fontweight="bold")
         ax.set_title(model_name, fontweight="bold", fontsize=12)
         max_corr = max(correlations) if correlations else 0.0
         ax.set_xlim(0, (max_corr * 1.35) if max_corr > 0 else 1.0)
         ax.grid(axis="x", alpha=0.3, linestyle="--")
 
-    fig.suptitle("TOP 3 Features per Model (Medal Ranking by Combined Impact)", fontsize=16, fontweight="bold", y=0.98)
+    fig.suptitle("TOP 3 Features per Model (Medal Ranking by Aggregated Rank)", fontsize=16, fontweight="bold", y=0.98)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    return output_path
+
+
+def plot_metricwise_top3_heatmaps(metricwise_df: pd.DataFrame, output_path: Path | None = None) -> Path:
+    """
+    Pokazuje heatmapy TOP-3 per metryka dla każdego modelu.
+
+    Argumenty:
+        metricwise_df: DataFrame z kolumnami [Model, Metric, Rank, Feature, Metric Score]
+        output_path: Ścieżka do pliku wyjściowego
+
+    Zwraca:
+        Path: Ścieżka do zapisu pliku
+    """
+    if output_path is None:
+        output_path = PLOTS_DIR / "metricwise_top3_heatmaps.png"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    metric_labels = {
+        "spearman": "Spearman",
+        "kendall": "Kendall",
+        "mutual_info": "Mutual Info",
+        "permutation_importance": "Permutation",
+    }
+    feature_labels = {
+        "pace_min_km": "Pace",
+        "average_hr": "Avg HR",
+        "elevation_gain": "Elevation",
+        "total_distance": "Distance",
+        "final_cadence": "Cadence",
+        "aerobic_decoupling": "Decoupling",
+        "age": "Age",
+        "athlete_weight": "Weight",
+    }
+    metric_order = ["Spearman", "Kendall", "Mutual Info", "Permutation"]
+    feature_order = [
+        "Pace",
+        "Avg HR",
+        "Elevation",
+        "Distance",
+        "Cadence",
+        "Decoupling",
+        "Age",
+        "Weight",
+    ]
+
+    df = metricwise_df.copy()
+    df["Metric"] = df["Metric"].map(lambda x: metric_labels.get(x, x))
+    df["Feature"] = df["Feature"].map(lambda x: feature_labels.get(x, x))
+
+    models = list(df["Model"].unique())
+    n_models = len(models)
+    ncols = 2
+    nrows = (n_models + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16, 4 * nrows))
+    axes = axes.flatten() if hasattr(axes, "flatten") else [axes]
+
+    for idx, model in enumerate(models):
+        ax = axes[idx]
+        model_df = df[df["Model"] == model]
+        pivot = model_df.pivot_table(
+            index="Metric",
+            columns="Feature",
+            values="Metric Score",
+            aggfunc="mean",
+            fill_value=0.0,
+        )
+        pivot = pivot.reindex(index=metric_order, columns=feature_order, fill_value=0.0)
+        sns.heatmap(
+            pivot,
+            annot=True,
+            fmt=".3f",
+            cmap="YlOrRd",
+            cbar=False,
+            linewidths=0.5,
+            linecolor="white",
+            ax=ax,
+        )
+        ax.set_title(model, fontweight="bold")
+        ax.set_xlabel("Feature")
+        ax.set_ylabel("Metric")
+        ax.tick_params(axis="x", rotation=35)
+
+    for idx in range(n_models, len(axes)):
+        axes[idx].axis("off")
+
+    fig.suptitle("TOP-3 Feature Scores Per Metric (By Model)", fontsize=15, fontweight="bold", y=0.99)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    return output_path
+
+
+def plot_metricwise_consensus(metricwise_df: pd.DataFrame, output_path: Path | None = None) -> Path:
+    """
+    Pokazuje konsensus metryk: ile razy cecha pojawia się w TOP-3,
+    rozbite na metryki (stacked bar).
+    """
+    if output_path is None:
+        output_path = PLOTS_DIR / "metricwise_consensus.png"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    metric_labels = {
+        "spearman": "Spearman",
+        "kendall": "Kendall",
+        "mutual_info": "Mutual Info",
+        "permutation_importance": "Permutation",
+    }
+    feature_labels = {
+        "pace_min_km": "Pace",
+        "average_hr": "Avg HR",
+        "elevation_gain": "Elevation",
+        "total_distance": "Distance",
+        "final_cadence": "Cadence",
+        "aerobic_decoupling": "Decoupling",
+        "age": "Age",
+        "athlete_weight": "Weight",
+    }
+    metric_order = ["Spearman", "Kendall", "Mutual Info", "Permutation"]
+    feature_order = [
+        "Pace",
+        "Avg HR",
+        "Elevation",
+        "Distance",
+        "Cadence",
+        "Decoupling",
+        "Age",
+        "Weight",
+    ]
+
+    df = metricwise_df.copy()
+    df["Metric"] = df["Metric"].map(lambda x: metric_labels.get(x, x))
+    df["Feature"] = df["Feature"].map(lambda x: feature_labels.get(x, x))
+
+    counts = (
+        df.groupby(["Feature", "Metric"], as_index=False)
+        .size()
+        .rename(columns={"size": "Count"})
+    )
+    pivot = counts.pivot(index="Feature", columns="Metric", values="Count").fillna(0)
+    pivot = pivot.reindex(index=feature_order, columns=metric_order, fill_value=0)
+
+    ax = pivot.plot(
+        kind="bar",
+        stacked=True,
+        figsize=(12, 7),
+        colormap="tab20",
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax.set_title("Feature Consensus Across Metrics (Top-3 Frequency)", fontweight="bold")
+    ax.set_xlabel("Feature")
+    ax.set_ylabel("Count of appearances in Top-3")
+    ax.tick_params(axis="x", rotation=30)
+    ax.legend(title="Metric", bbox_to_anchor=(1.02, 1), loc="upper left")
+    ax.grid(axis="y", alpha=0.25, linestyle="--")
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    return output_path
+
+
+def plot_metric_agreement_heatmaps(metric_agreement_df: pd.DataFrame, output_path: Path | None = None) -> Path:
+    """
+    Heatmapy zgodności metryk (korelacja rang) dla każdego modelu.
+    """
+    if output_path is None:
+        output_path = PLOTS_DIR / "metric_agreement_heatmaps.png"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    metric_labels = {
+        "spearman": "Spearman",
+        "kendall": "Kendall",
+        "mutual_info": "Mutual Info",
+        "permutation_importance": "Permutation",
+    }
+    metric_order = ["Spearman", "Kendall", "Mutual Info", "Permutation"]
+
+    df = metric_agreement_df.copy()
+    df["Metric A"] = df["Metric A"].map(lambda x: metric_labels.get(x, x))
+    df["Metric B"] = df["Metric B"].map(lambda x: metric_labels.get(x, x))
+
+    models = list(df["Model"].unique())
+    n_models = len(models)
+    ncols = 2
+    nrows = (n_models + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(13, 5 * nrows))
+    axes = axes.flatten() if hasattr(axes, "flatten") else [axes]
+
+    for idx, model in enumerate(models):
+        ax = axes[idx]
+        model_df = df[df["Model"] == model]
+        pivot = model_df.pivot_table(
+            index="Metric A",
+            columns="Metric B",
+            values="Rank Correlation",
+            aggfunc="mean",
+            fill_value=0.0,
+        )
+        pivot = pivot.reindex(index=metric_order, columns=metric_order, fill_value=0.0)
+        sns.heatmap(
+            pivot,
+            annot=True,
+            fmt=".2f",
+            cmap="coolwarm",
+            vmin=-1,
+            vmax=1,
+            cbar=(idx == 0),
+            square=True,
+            linewidths=0.5,
+            linecolor="white",
+            ax=ax,
+        )
+        ax.set_title(model, fontweight="bold")
+        ax.set_xlabel("Metric B")
+        ax.set_ylabel("Metric A")
+        ax.tick_params(axis="x", rotation=35)
+
+    for idx in range(n_models, len(axes)):
+        axes[idx].axis("off")
+
+    fig.suptitle("Metric Agreement Matrix (Spearman Correlation of Feature Ranks)", fontsize=15, fontweight="bold", y=0.99)
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close()
